@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+import contextlib
+import io
 import sys
 import tempfile
 import unittest
@@ -71,6 +73,35 @@ class CheckTreeTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("rootdir/init.rc", problems[0])
         self.assertIn("SPDX", problems[0])
+
+    def test_pycache_pyc_rejected(self):
+        self.write("tools/__pycache__/x.cpython-311.pyc", b"\x00\x01")
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("__pycache__/x.cpython-311.pyc", problems[0])
+
+    def test_commented_copy_line_ignored(self):
+        self.write("x.mk", "#    $(LOCAL_PATH)/rootdir/gone:system/etc/gone\n")
+        self.assertEqual(check_tree.check(self.root), [])
+
+    def run_main(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = check_tree.main(["check_tree.py", str(self.root)])
+        return rc, out.getvalue()
+
+    def test_main_clean(self):
+        self.assertEqual(self.run_main(), (0, ""))
+
+    def test_main_prints_problems(self):
+        self.write("a.dat", b"\x00")
+        self.write("b.dat", b"\x00")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 1)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("a.dat", lines[0])
+        self.assertIn("b.dat", lines[1])
 
 
 if __name__ == "__main__":

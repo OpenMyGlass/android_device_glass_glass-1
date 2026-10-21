@@ -14,7 +14,7 @@ SPDX_FILES = ("system.prop", "proprietary-files.txt")
 def _files(root):
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root)
-        if ".git" in rel.parts or "__pycache__" in rel.parts or not path.is_file():
+        if ".git" in rel.parts or not path.is_file():
             continue
         yield path, rel.as_posix()
 
@@ -51,9 +51,12 @@ def check(root):
             continue
         text = data.decode("utf-8", errors="replace")
         if rel.endswith(".mk"):
-            for m in COPY_RE.finditer(text):
-                if not (root / m.group(2)).is_file():
-                    problems.append(f"{rel}: copy source missing: {m.group(2)}")
+            for line in text.splitlines():
+                if line.strip().startswith("#"):
+                    continue
+                for m in COPY_RE.finditer(line):
+                    if not (root / m.group(2)).is_file():
+                        problems.append(f"{rel}: copy source missing: {m.group(2)}")
         if rel.startswith(SPDX_PATHS) or rel in SPDX_FILES:
             head = "\n".join(text.splitlines()[:5])
             if "SPDX-License-Identifier" not in head:
