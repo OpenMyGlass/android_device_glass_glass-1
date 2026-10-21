@@ -60,3 +60,18 @@ WIFI_DRIVER_FW_PATH_STA          := "/vendor/firmware/fw_bcmdhd.bin"
 BOARD_HAVE_BLUETOOTH := true
 BOARD_HAVE_BLUETOOTH_BCM := true
 BOARD_BLUETOOTH_BDROID_BUILDCFG_INCLUDE_DIR := device/glass/glass-1/bluetooth
+
+# Lean system (docs/kitkat.md, "Lean items"). Packages the AOSP products inherited by
+# full_glass_1.mk add, which Glass does not use. inherit-product cannot take a package away, so
+# they are filtered out of the product's list here: BoardConfig.mk is read after product
+# configuration and before build/core/main.mk reads PRODUCT_PACKAGES. Delete a name to build
+# it again.
+GLASS_REMOVED_PACKAGES := \
+    BasicDreams Browser Calculator Calendar Camera2 Contacts DeskClock Email Exchange2 \
+    Galaxy4 Gallery2 HoloSpiralWallpaper LatinIME Launcher2 LiveWallpapers \
+    LiveWallpapersPicker MagicSmokeWallpapers Music NoiseField OneTimeInitializer OpenWnn \
+    PhaseBeam PhotoTable PinyinIME PrintSpooler QuickSearchBox TeleService \
+    TelephonyProvider VideoEditor VisualizationWallpapers WAPPushManager WallpaperCropper \
+    libWnnEngDic libWnnJpnDic libwnndict
+PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGES := \
+    $(filter-out $(GLASS_REMOVED_PACKAGES),$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGES))
