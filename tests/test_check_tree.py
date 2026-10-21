@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 import contextlib
 import io
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -27,6 +29,14 @@ class CheckTreeTest(unittest.TestCase):
         path = self.root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data if isinstance(data, bytes) else data.encode())
+
+    @unittest.skipUnless(shutil.which("git"), "git not on PATH")
+    def test_git_checkout_ignores_untracked(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        for rel in ("device.mk", "rootdir/fstab.omap4430", "proprietary-files.txt"):
+            subprocess.run(["git", "-C", str(self.root), "add", rel], check=True)
+        self.write("big.txt", b"x" * (check_tree.MAX_SIZE + 1))
+        self.assertEqual(check_tree.check(self.root), [])
 
     def test_clean_tree(self):
         self.assertEqual(check_tree.check(self.root), [])
