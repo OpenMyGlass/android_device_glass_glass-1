@@ -105,6 +105,19 @@ class FactsTest(unittest.TestCase):
                 else:
                     self.assertEqual(chmods.get(path), [row["Mode"]])
 
+    def test_directories(self):
+        made = {}
+        for header, cmds in rc_blocks("rootdir/init.omap4430.rc"):
+            for cmd in cmds:
+                if header[:2] == ["on", "boot"] and cmd[0] == "mkdir":
+                    self.assertNotIn(cmd[1], made, "directory made twice")
+                    made[cmd[1]] = cmd[2:]
+        rows = facts_table("Directories")
+        for row in rows:
+            with self.subTest(path=row["Path"]):
+                self.assertEqual(made.get(row["Path"]), [row["Mode"], row["User"], row["Group"]])
+        self.assertEqual(sorted(made), sorted(row["Path"] for row in rows))
+
     def test_services(self):
         services = {}
         for header, opts in rc_blocks("rootdir/init.omap4430.rc"):

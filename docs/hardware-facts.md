@@ -375,10 +375,12 @@ All paths are under /sys/class/android_usb.
 | /data/misc/audio | 0664 | system | system | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/dhcp | 0770 | dhcp | dhcp | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/gcam | 0770 | media | camera | XE24 ramdisk, Justin 6.0 tree |
+| /data/misc/sensors | 0770 | system | system | This tree: the open sensors HAL keeps its magnetometer calibration there (docs/hals.md). Not in XE24, whose MPL library wrote /data/inv_cal_data.bin (docs/specs/sensors.md §5.5) |
 | /data/misc/wifi | 0770 | wifi | wifi | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/wifi/sockets | 0770 | wifi | wifi | XE24 ramdisk, Justin 6.0 tree |
 
-The stock files create these `on boot`.
+The stock files create these `on boot`, except /data/misc/sensors, which only this tree has.
+`init.omap4430.rc` creates all of them `on boot` (checked by `tests/test_facts.py`).
 
 ## Sysfs writes
 

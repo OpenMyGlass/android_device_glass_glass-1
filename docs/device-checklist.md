@@ -22,9 +22,28 @@ All not run.
 - On both builds, `lights.glass_1` loads, and the settings brightness slider changes `/sys/devices/platform/omapdss/manager2/panel-notle-dpi/brightness` (0-255) and the visible brightness. Not run.
 - Screen off writes 0 and turns the backlight off. Screen on restores the previous value. Not run.
 - With the default `brightness_limit`, writing 223 and then 255 to `brightness` gives the same visible brightness, as the driver code predicts. If so, the owner decides whether the slider should map to 0-223. Not run.
-- No light other than the backlight is requested without an error in logcat: `LightsService` handles the `-EINVAL`. Not run.
+- Requesting any light other than the backlight fails quietly: the HAL returns `-EINVAL` and `LightsService` ignores that light, with no crash in logcat. Not run.
 
 ## GPS (`docs/hals.md`, No GPS HAL)
 
 - GPS stays off: after a cold boot, after a reboot straight from stock firmware, and after suspend/resume, `cat /sys/class/gps/gps_elton/{onoff,reset,awake}` reads 0, 1, 0 (hibernate), and battery current with the screen off matches a build without any GPS use. Not run.
 - No `gps_elton` writes: `dmesg` has no `Setting on_off` or `Setting reset` lines from the driver, `logcat` shows no GPS HAL loading, and nothing opens `/dev/ttyO3` (`ls -l /proc/*/fd 2>/dev/null | grep ttyO3` is empty). Not run.
+
+## Sensors HAL (`docs/hals.md`, `docs/specs/sensors.md`)
+
+All not run.
+
+- On both the 4.4 and the 6.0 build, `sensors.glass_1` loads: `logcat -s sensors.glass_1` shows no "no IIO device named mpu9150" or "no input device named ltr506_als", and `dumpsys sensorservice` lists the six sensors plus the framework's virtual orientation, rotation vector, game rotation vector, gravity and linear acceleration. Not run.
+- Raw mode (spec §9.1): with `dmp_on` 0, enabling accelerometer, gyroscope and magnetometer together gives 32-byte records with format byte 0x0E, and logcat shows no "record with data format" warnings. Repeat with each sensor alone (16-byte records). Not run.
+- Compass alone: enabling only the magnetometer delivers events at its rate (the HAL keeps the accel engine on for that). If none arrive, the data-ready interrupt needs something else. Not run.
+- Axes (spec §9.2): Glass upright and still gives about +9.8 m/s² on the axis Android expects for "up" after the sysfs matrices (body = M × chip); a nod and a head turn give gyro signs that match the right-hand rule; the compass heading in an app matches a phone's. Not run.
+- Matrices: `cat /sys/bus/iio/devices/iio:device0/{gyro,accl,compass}_matrix` reads `0,1,0,0,0,1,1,0,0`, the same, and `1,0,0,0,0,-1,0,1,0`; logcat has no "not a signed permutation" error. Not run.
+- Clock (spec §9.3): event timestamps track `SystemClock.elapsedRealtimeNanos()` within a few milliseconds, before and after a suspend/resume, for motion and light events; logcat "robust clock offset moved" lines show how far the 32 kHz counter drifts from `CLOCK_BOOTTIME`. On 4.4, check whether any app compares sensor stamps with `System.nanoTime()`. Not run.
+- Rates: at SENSOR_DELAY_FASTEST the gyro and accel deliver about 200 Hz and the magnetometer about 100 Hz, with no zero-triple magnetometer events; at SENSOR_DELAY_NORMAL about 5 Hz. Not run.
+- Magnetometer calibration: after waving the head through nods and turns, logcat shows "hard-iron bias ... uT, field ... uT" with a field of 25-65 µT, `/data/misc/sensors/glass_magcal.txt` appears (directory 0770 system system), and after a reboot "loaded hard-iron bias" appears. Not run.
+- Gyro bias: Glass left on a table for a few seconds, with the gyro at 10 Hz or more (SENSOR_DELAY_UI or faster), gives GYROSCOPE events near 0 rad/s and GYROSCOPE_UNCALIBRATED events whose bias field equals the offset. At SENSOR_DELAY_NORMAL the bias is never estimated. Not run.
+- Light (spec §9.4): covering and lighting the sensor changes LIGHT events; compare the values with a phone lux meter to decide on a lux factor. Enabling the light sensor gives one event at once (from `als_adc`) even when the light does not change; check that its value is on the same scale as the following events, in particular on part ID 0x90, where the driver reports channel 1 in events. Not run.
+- Input numbers (spec §9.5): `cat /sys/class/input/input*/name` shows which inputN are `ltr506_als` and `ltr506_ps` on the new build; the HAL finds them by name, but the `input2`/`input3` chowns in `init.omap4430.rc` follow stock and may point at other devices. Not run.
+- Power (spec §9.6): with every sensor off, `power_state` reads 0 and the battery current drops compared with a sensor running; `als_enable` reads 0 with the light sensor off. Not run.
+- IIO device number: `/sys/bus/iio/devices/iio:device0/name` is `mpu9150`. If the device has another number, the `iio:device0` paths in `ueventd.omap4430.rc` and `init.omap4430.rc` need it. Not run.
+- Batching requests: an app registering with a max report latency still gets events (SensorManager retries in continuous mode after `batch` returns `-EINVAL`). Not run.

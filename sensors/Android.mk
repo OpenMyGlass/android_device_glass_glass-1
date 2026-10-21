@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# sensors.glass_1: see docs/hals.md. tools/build-hals.py reads LOCAL_MODULE, LOCAL_SRC_FILES,
+# LOCAL_CFLAGS and LOCAL_SHARED_LIBRARIES from this file to build it in CI.
+LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := sensors.glass_1
+# LOCAL_MODULE_PATH rather than LOCAL_MODULE_RELATIVE_PATH (5.0 and later): it works on both
+# the 4.4 and 6.0 builds, and the device is 32-bit only.
+LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+LOCAL_MODULE_TAGS := optional
+LOCAL_SRC_FILES := sensors.c sensors_logic.c
+LOCAL_SHARED_LIBRARIES := liblog libm
+LOCAL_CFLAGS := -Wall -Wextra -Werror
+include $(BUILD_SHARED_LIBRARY)

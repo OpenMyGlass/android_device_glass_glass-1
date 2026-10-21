@@ -32,7 +32,6 @@ vendor/lib/libusc_SGX540_120.so
 
 # HALs
 lib/hw/audio.primary.glass_1.so
-lib/hw/sensors.glass_1.so
 vendor/lib/hw/gralloc.omap4430.so
 
 # Glass daemons
