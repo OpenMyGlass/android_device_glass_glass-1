@@ -8,7 +8,7 @@ from pathlib import Path
 
 MAX_SIZE = 65536
 COPY_RE = re.compile(r"(\$\(LOCAL_PATH\)|device/glass/glass-1)/([^:\s]+):")
-SPDX_PATHS = ("rootdir/", "tools/", "tests/")
+SPDX_PATHS = ("rootdir/", "tools/", "tests/", ".github/", "power/", "lights/")
 SPDX_FILES = ("system.prop", "proprietary-files.txt")
 
 
