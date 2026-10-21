@@ -38,3 +38,9 @@ wlan.driver.vendor=bcm
 # Bluetooth
 bluetooth.enable_timeout_ms=10000
 ro.bt.bdaddr_path=/data/misc/bluedroid/bdaddr
+
+# dex2oat compiler filters (ART only; installd in OpenMyGlass/android_frameworks_native).
+# System code is compiled once, for speed; user apps for size and install time. Change with
+# setprop (persist.), or per package in /data/system/glass-dex2oat-filters.
+persist.glass.d2o.sys=speed
+persist.glass.d2o.usr=space

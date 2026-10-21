@@ -35,8 +35,38 @@ manifest's `docs/kitkat-base.md`.
 
   So the three `libbltsville_*` lines are dropped from `proprietary-files.txt`. Extracting them
   as well would give two rules for the same output file.
-- **Dex pre-optimisation.** `WITH_DEXPREOPT_PIC` is a 5.0+ variable and is dropped. Whether
-  to pre-optimise at all is the ART-only change (its own pull request).
+- **Dex pre-optimisation.** `WITH_DEXPREOPT_PIC` is a 5.0+ variable and is dropped.
+- **ART only.** See the next section.
+
+## ART only
+
+- **Product.** `full_glass_1.mk` sets `PRODUCT_RUNTIMES := runtime_libart_default` after it
+  inherits `aosp_base.mk`.
+  - `core_minimal.mk` lists `runtime_libdvm_default` and `runtime_libart`.
+  - `inherit-product` (`build/core/product.mk`) stores the inherited product as a tag in each
+    variable, so a later `:=` replaces the inherited runtimes.
+  - `build/core/product_config.mk` then includes only `runtime_libart_default.mk`. It sets
+    `persist.sys.dalvik.vm.lib=libart.so` and adds `core-libart`, `libart`, `dex2oat` and
+    `oatdump` (through `runtime_libart.mk`).
+  - `libdvm`, `dexopt` and `core.jar` are not installed.
+- **No pre-optimisation.** `DISABLE_DEXPREOPT := true`. 4.4's `core/dex_preopt.mk` only runs the
+  host `dexopt`, which writes Dalvik `.odex` files, so `WITH_DEXPREOPT` would only add files ART
+  ignores. Every APK and jar keeps `classes.dex`. `boot.oat` and the apps are compiled on the
+  device at first boot (`/data/dalvik-cache`).
+- **Fallbacks.** The forks pinned by the manifest patch the two places that fall back to Dalvik:
+  - `libnativehelper`'s `JniInvocation` falls back to `libart.so`;
+  - `frameworks/native`'s installd defaults to `libart.so` and always runs `dex2oat`.
+
+  `SystemServer` writes `persist.sys.dalvik.vm.lib` back from `VMRuntime.vmLibrary()`, which is
+  now always `libart.so`. The runtime picker in Settings' developer options removes itself when
+  only one of `/system/lib/libdvm.so` and `/system/lib/libart.so` exists
+  (`DevelopmentSettings.filterRuntimeOptions`), so Settings needs no patch.
+- **dex2oat filters.** `system.prop` sets `persist.glass.d2o.sys=speed` (code under `/system`)
+  and `persist.glass.d2o.usr=space` (user apps). installd passes them as
+  `--runtime-arg -compiler-filter:<filter>`. A line `<package> <filter>` in
+  `/data/system/glass-dex2oat-filters` overrides them for one package: for example
+  `com.example interpret-only` for an app that dex2oat fails on. The boot image keeps dex2oat's
+  own default for images, `everything`.
 
 ## 4.4 versus 6.0, for the files shared with the 6.0.1 branch
 
@@ -63,9 +93,8 @@ manifest's `docs/kitkat-base.md`.
 ## Open items
 
 Each is its own pull request into this branch:
-1. ART only: `PRODUCT_RUNTIMES`, `DISABLE_DEXPREOPT`, and the dex2oat filter properties.
-2. The 4.4 emulated sdcard in `rootdir/init.omap4430.rc` and `docs/hardware-facts.md`.
-3. The lean items of the plan's Task 4 that are one property or one makefile line.
+1. The 4.4 emulated sdcard in `rootdir/init.omap4430.rc` and `docs/hardware-facts.md`.
+2. The lean items of the plan's Task 4 that are one property or one makefile line.
 
 ## Device checks
 
@@ -77,5 +106,13 @@ All not run (no hardware). Use `fastboot boot` only; never flash `bootloader`, `
   `dmesg | grep SGXInit` has no `(FAIL)` line after `pvrsrvinit`.
 - `ls -l /system/vendor/lib/libbltsville*` shows the files and symlinks from `hardware/ti/omap4`,
   and nothing in `logcat` fails to load them.
+- First boot completes, and `getprop persist.sys.dalvik.vm.lib` gives `libart.so`.
+- `/data/dalvik-cache` holds `system@framework@boot.art` and `system@framework@boot.oat`.
+- `ls /system/lib/libdvm.so /system/bin/dexopt` finds neither, and `logcat` has no
+  JniInvocation `Falling back` line.
+- Developer options show no "Select runtime" entry.
+- Installing an APK logs `dex2oat` with `-compiler-filter:space`; `dumpsys meminfo` works.
+- Time from `fastboot boot` to `sys.boot_completed=1` on the first boot, and the size of
+  `/data/dalvik-cache` (plan Task 3).
 - SurfaceFlinger starts on the PowerVR driver: `logcat | grep -i egl` names
   `/vendor/lib/egl/libEGL_POWERVR_SGX540_120.so`.
