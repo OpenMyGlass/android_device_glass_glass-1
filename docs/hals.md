@@ -33,6 +33,8 @@ in for sysfs. `tests/test_build_hals.py` tests the `Android.mk` reader and the s
 
 `hardware/power.h` and `hardware/lights.h` are the same apart from one comment: from 6.0,
 `POWER_HINT_INTERACTION`'s data is the expected duration in milliseconds (unused here). No `#if` is needed.
+The build differs: 5.1's `log/uio.h` needs `HAVE_SYS_UIO_H`, which the 5.1 AOSP build gets from its
+force-included `AndroidConfig.h`. `tools/build-hals.py` defines it for both releases, and 6.0 ignores it.
 
 ## Power HAL (`power/`, `power.glass_1`)
 
