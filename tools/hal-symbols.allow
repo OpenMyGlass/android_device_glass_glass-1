@@ -10,6 +10,8 @@ libaudioutils release_resampler
 libcutils property_get
 libtinyalsa mixer_close
 libtinyalsa mixer_ctl_get_num_values
+libtinyalsa mixer_ctl_get_range_max
+libtinyalsa mixer_ctl_get_range_min
 libtinyalsa mixer_ctl_set_enum_by_string
 libtinyalsa mixer_ctl_set_value
 libtinyalsa mixer_get_ctl_by_name

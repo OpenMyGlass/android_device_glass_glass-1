@@ -42,14 +42,15 @@ const size_t glass_required_ctls_count = ARRAY_LEN(glass_required_ctls);
  * Spec 4.2, in the stock order. Kernel files: sound/soc/omap/omap-abe-mixer.c (ABE),
  * sound/soc/codecs/twl6040.c (codec), sound/soc/omap/omap-abe-twl6040.c (machine). The three
  * power-mode enums are the stock values, unchanged (rule 6). The stock table lists
- * "DL1 PDM Switch" twice; once is enough.
+ * "DL1 PDM Switch" twice; once is enough. One value differs from stock on purpose: the
+ * earpiece volume (GLASS_EARPHONE_VOLUME_DEFAULT, audio_logic.h).
  */
 const struct glass_ctl glass_init_ctls[] = {
     { "DL1 Media Playback Volume", NULL, 120 },  /* ABE, 0 dB */
     { "DL1 Voice Playback Volume", NULL, 120 },  /* ABE, 0 dB */
     { "SDT DL Volume", NULL, 120 },              /* ABE, 0 dB */
     { "Earphone Playback Switch", NULL, 1 },
-    { "Earphone Playback Volume", NULL, GLASS_EARPHONE_VOLUME_MAX }, /* +6 dB */
+    { "Earphone Playback Volume", NULL, GLASS_EARPHONE_VOLUME_DEFAULT }, /* 0 dB; stock 15 */
     { "Headset Playback Volume", NULL, GLASS_HEADSET_VOLUME_MAX },   /* -6 dB */
     { "Capture Preamplifier Volume", NULL, 1 },  /* analog mics, not fitted */
     { "Capture Volume", NULL, 4 },               /* analog mics, not fitted */
@@ -119,11 +120,20 @@ int glass_mixer_set_int(struct mixer *mixer, const char *name, int value)
 {
     struct mixer_ctl *ctl = mixer_get_ctl_by_name(mixer, name);
     unsigned int i, n;
-    int ret = 0;
+    int lo, hi, ret = 0;
 
     if (!ctl)
         return -ENOENT;
     value = capped(name, value);
+    /* tinyalsa does not check ranges. Both calls fail (-EINVAL) for non-integer controls. */
+    lo = mixer_ctl_get_range_min(ctl);
+    hi = mixer_ctl_get_range_max(ctl);
+    if (lo < hi) {
+        if (value < lo)
+            value = lo;
+        else if (value > hi)
+            value = hi;
+    }
     n = mixer_ctl_get_num_values(ctl);
     for (i = 0; i < n; i++) {
         int r = mixer_ctl_set_value(ctl, i, value);
