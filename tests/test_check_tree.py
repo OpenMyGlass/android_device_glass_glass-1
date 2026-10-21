@@ -1,0 +1,118 @@
+# SPDX-License-Identifier: Apache-2.0
+import contextlib
+import io
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+
+import check_tree  # noqa: E402
+
+SPDX = "# SPDX-License-Identifier: Apache-2.0\n"
+
+
+class CheckTreeTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.write("device.mk", "PRODUCT_COPY_FILES += \\\n"
+                   "    $(LOCAL_PATH)/rootdir/fstab.omap4430:root/fstab.omap4430\n")
+        self.write("rootdir/fstab.omap4430", SPDX + "# fstab\n")
+        self.write("proprietary-files.txt", SPDX + "#\n# A\na\nb\n\n# B\na\n")
+
+    def write(self, rel, data):
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data if isinstance(data, bytes) else data.encode())
+
+    @unittest.skipUnless(shutil.which("git"), "git not on PATH")
+    def test_git_checkout_ignores_untracked(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        for rel in ("device.mk", "rootdir/fstab.omap4430", "proprietary-files.txt"):
+            subprocess.run(["git", "-C", str(self.root), "add", rel], check=True)
+        self.write("big.txt", b"x" * (check_tree.MAX_SIZE + 1))
+        self.assertEqual(check_tree.check(self.root), [])
+
+    def test_clean_tree(self):
+        self.assertEqual(check_tree.check(self.root), [])
+
+    def test_missing_copy_source(self):
+        (self.root / "rootdir/fstab.omap4430").unlink()
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("rootdir/fstab.omap4430", problems[0])
+
+    def test_device_path_form(self):
+        self.write("x.mk", "    device/glass/glass-1/x.conf:system/etc/x.conf\n")
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("x.conf", problems[0])
+        self.write("x.conf", "k=v\n")
+        self.assertEqual(check_tree.check(self.root), [])
+
+    def test_binary_file_rejected(self):
+        self.write("blob.dat", b"ab\x00cd")
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("blob.dat", problems[0])
+
+    def test_large_file_rejected(self):
+        self.write("big.txt", "a" * 65537)
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("big.txt", problems[0])
+
+    def test_list_duplicates_and_order(self):
+        self.write("proprietary-files.txt", SPDX + "# A\na\na\n")
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("duplicate", problems[0])
+        self.write("proprietary-files.txt", SPDX + "# A\nb\na\n")
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("order", problems[0])
+
+    def test_new_file_needs_spdx(self):
+        self.write("rootdir/init.rc", "on boot\n")
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("rootdir/init.rc", problems[0])
+        self.assertIn("SPDX", problems[0])
+
+    def test_pycache_pyc_rejected(self):
+        self.write("tools/__pycache__/x.cpython-311.pyc", b"\x00\x01")
+        problems = check_tree.check(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("__pycache__/x.cpython-311.pyc", problems[0])
+
+    def test_commented_copy_line_ignored(self):
+        self.write("x.mk", "#    $(LOCAL_PATH)/rootdir/gone:system/etc/gone\n")
+        self.assertEqual(check_tree.check(self.root), [])
+
+    def run_main(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = check_tree.main(["check_tree.py", str(self.root)])
+        return rc, out.getvalue()
+
+    def test_main_clean(self):
+        self.assertEqual(self.run_main(), (0, ""))
+
+    def test_main_prints_problems(self):
+        self.write("a.dat", b"\x00")
+        self.write("b.dat", b"\x00")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 1)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("a.dat", lines[0])
+        self.assertIn("b.dat", lines[1])
+
+
+if __name__ == "__main__":
+    unittest.main()
