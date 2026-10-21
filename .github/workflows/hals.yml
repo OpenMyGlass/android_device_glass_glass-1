@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# Cross-compile the open HALs with the NDK against AOSP headers of both supported
+# releases. Pinned header commits: tools/aosp-headers.lock. A new HAL directory goes in HALS.
+name: hals
+on:
+  push:
+    branches: [android-6.0.1_r31]
+  pull_request:
+permissions:
+  contents: read
+env:
+  HALS: power lights
+jobs:
+  hals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: [android-6.0.1_r31, android-5.1.1_r37]
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fetch pinned AOSP headers
+        run: tools/fetch-aosp-headers.sh "${{ matrix.tag }}" "$RUNNER_TEMP/aosp"
+      - name: Cross-compile and check the HALs
+        run: |
+          test -n "$ANDROID_NDK_LATEST_HOME"
+          echo "NDK: $ANDROID_NDK_LATEST_HOME"
+          python3 tools/build-hals.py --ndk "$ANDROID_NDK_LATEST_HOME" \
+            --headers "$RUNNER_TEMP/aosp" --out "$RUNNER_TEMP/out" $HALS
