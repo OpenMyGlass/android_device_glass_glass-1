@@ -421,7 +421,7 @@ copied from tuna or any other HAL, so there is no third-party copyright notice t
 | What | Value | Source |
 |---|---|---|
 | Card | 0, "Notle" (`omap-abe-twl6040`); the HAL refuses to open unless the 10 controls of spec 4.1 exist | spec 1, 4.1 |
-| Mixer at open | the table of spec 4.2 in order, every channel; `DL1 PDM Switch` once, not twice; then the earpiece path | spec 4.2; `omap-abe-mixer.c`, `twl6040.c` |
+| Mixer at open | the table of spec 4.2 in order, every channel; `DL1 PDM Switch` once, not twice; `Earphone Playback Volume` 12 instead of 15 (below); then the earpiece path | spec 4.2; `omap-abe-mixer.c`, `twl6040.c` |
 | Playback | device 0 (ABE Multimedia FE), `PCM_OUT \| PCM_MONOTONIC`, S16_LE stereo 48000 Hz, 4 periods of 1056 frames (88 ms), `pcm_write` | spec 5.1, 7 |
 | Earpiece path (no earbud) | `Earphone Playback Switch` 1, `Headset Left/Right Playback` "Off": the bone conduction transducer on the TWL6040 EP output | spec 4.3 |
 | Headset path (earbud on USB) | `Earphone Playback Switch` 0, `Headset Left/Right Playback` "HS DAC" | spec 4.3; `twl6040.c:639-641` |
@@ -439,10 +439,19 @@ copied from tuna or any other HAL, so there is no third-party copyright notice t
 
 Rule 6: the HAL writes no TWL6040 power or voltage setting other than the stock enum values of spec
 4.2 (`TWL6040 Power Mode` and `PLL Selection` "Low-Power", `Headset Power Mode`
-"High-Performance"). It never touches the handsfree (HF) outputs. `Earphone Playback Volume` is 15
-(+6 dB, also the control's maximum) and `Headset Playback Volume` 12 (−6 dB), the stock values;
-`glass_mixer_set_int` lowers any higher value to those (`GLASS_EARPHONE_VOLUME_MAX`,
-`GLASS_HEADSET_VOLUME_MAX`), and the host tests check both. Loudness is AudioFlinger's software
+"High-Performance"). It never touches the handsfree (HF) outputs.
+
+Earpiece level (coordinator decision): `Earphone Playback Volume` defaults to
+`GLASS_EARPHONE_VOLUME_DEFAULT` = 12, which is 0 dB (`ep_tlv` is −24 dB + 2 dB per step,
+`twl6040.c:624, 853`), 6 dB below the stock 15 (+6 dB, also the control's maximum). Stock runs a
+limiter and filters for the transducer in its libglassalsa stage (spec 6), which this HAL does not
+have, so without it peaks could be louder than stock against the temple. 15 stays the hard cap
+(`GLASS_EARPHONE_VOLUME_MAX`). Raising the default to 15 is an owner decision, once the checklist row
+"no louder than stock" has been measured. `Headset Playback Volume` is the stock 12 (−6 dB), also its
+cap (`GLASS_HEADSET_VOLUME_MAX`). `glass_mixer_set_int` lowers any higher value of either control to
+its cap, and clamps every integer write (the init table, `voice_volume=`, `audio.dmic1gain`,
+`audio.voicegain`) to the control's range from `mixer_ctl_get_range_min/max`, since tinyalsa itself
+does not check it. The host tests check all of this. Loudness is otherwise AudioFlinger's software
 volume only.
 
 Permissions: the HAL runs in mediaserver (uid media, group audio) on 4.4 and 6.0. `mux_mode` and
@@ -464,9 +473,19 @@ Sysfs, checked by `tests/test_audio_logic.py`). `id_monitor` is `S_IWUGO | S_IRU
 - Not implemented: the deep-buffer output and `persist.lab.lp_aud` (spec 5.1), the voice-FE output
   for `audio.out.rate` ≤ 16000, and putting the input in standby when the output starts (spec 5.1,
   last row), which served the stock echo reference. The stock `libglassalsa` processing (spec 6) has
-  no open replacement yet: no bone-conduction equalisation, wind or noise reduction. AOSP
-  pre-processing effects can be attached by the framework (`add_audio_effect` accepts them) if an
-  `audio_effects.conf` with a `pre_processing` section is installed; this tree installs none yet.
+  no open replacement yet: no bone-conduction equalisation, limiter, wind or noise reduction. AOSP's
+  `audio_effects.conf` (frameworks/av `media/libeffects/data`) is installed by
+  `generic_no_telephony.mk`, which this product inherits through `aosp_base.mk`; its
+  `pre_processing` section is commented out by default, so no capture pre-processing is attached.
+  Enabling AOSP's pre-processing (AEC, NS, AGC) would need a device `audio_effects.conf` with that
+  section; `add_audio_effect` already accepts effects.
+- `audio.voicegain` is read once, when the device opens, and `voice_volume=` changes it after that;
+  stock reads it at each `open_input_stream`. `audio.dmic1gain` is read at each capture start
+  (stock: at `open_input_stream`). Both gains are written at each capture start, as stock does.
+- `mux_mode` is never written back. After an earbud was used and removed, it stays `audio` until
+  the kernel changes it (it switches to USB when a USB cable comes online). Stock does the same.
+- One input at a time: while one input stream is open (for example the always-on voice
+  recognition), a second `open_input_stream` fails with `-ENOSYS`.
 
 ### Audio policy
 
@@ -481,10 +500,21 @@ BLUETOOTH_SCO_HEADSET, WIRED_HEADSET and BACK_MIC; the usb module's two 44100 Hz
 The format is the same for 4.4's legacy `audio_policy.default` and 6.0's AudioPolicyManager, which
 both read `/system/etc/audio_policy.conf` with cutils' config parser (`#` comments are allowed).
 
-### What a 4.4 branch needs
+### Owner decisions (audio)
 
-Power, lights and sensors build unchanged on a 4.4 tree: same sources, same `Android.mk`. For
-audio, see the audio section above.
+- Earpiece level: the default is 12 (0 dB), 6 dB below stock (above). Raising it to 15 once the
+  "no louder than stock" checklist row has been measured.
+- SCO in the policy: kept from stock, but the HAL has no SCO path. With a Bluetooth headset in a
+  call or VoIP app, AudioPolicy may route to SCO on the primary output and the sound then plays on
+  the transducer and records from the built-in mics, as on stock. Removing ALL_SCO and
+  BLUETOOTH_SCO_HEADSET would avoid that.
+- `a2dp` and `r_submix` modules: added (above); drop them to match stock.
+- `pause_for_audio`: the stock rule (every source but `VOICE_RECOGNITION`) is kept. Whether the
+  glasshub (wink and on-head sensor) should pause at all while recording is a product choice.
+
+## What a 4.4 branch needs
+
+All four HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
 - Power: nothing beyond the tree's `PRODUCT_PACKAGES` line. 4.4's `init.rc` already gives system the
   governor files (above), and 4.4's PowerManagerService uses power API 0.2. `hardware/ti/omap4` on a 4.4
   tree may add its own `power.omap4`; it stays unused for the same lookup-order reason.
@@ -492,5 +522,18 @@ audio, see the audio section above.
   stock 4.4 ramdisk already has. 4.4's LightsService handles a NULL device for absent lights as 6.0's does.
 - Sensors: nothing beyond `PRODUCT_PACKAGES` and the `/data/misc/sensors` mkdir in
   `init.omap4430.rc` (see "Sensors: what a 4.4 branch needs" above).
-- SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server to write
-  `sysfs` on both trees.
+- Audio:
+  - `audio/Android.mk` installs with `LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw`, which
+    4.4 accepts (no `LOCAL_MODULE_RELATIVE_PATH` before 5.0).
+  - `system/audio.h` is in system/core at 4.4 (system/media at 6.0); the include paths of both
+    builds find it, and `#ifdef AUDIO_DEVICE_API_VERSION_3_0` picks the 4.4 stream-open signatures.
+    `include-path-for audio-utils` exists in both builds.
+  - 4.4's AudioPolicyService loads `audio_policy.default`, which `generic_no_telephony.mk` already
+    adds (with `audio.primary.default`, never loaded since `audio.primary.glass_1` wins). It reads the
+    same `audio/audio_policy.conf`; the policy needs nothing extra.
+  - `audio.a2dp.default` comes from `external/bluetooth/bluedroid` on 4.4 (`system/bt` on 6.0);
+    `audio.usb.default` and `audio.r_submix.default` from hardware/libhardware; `tinymix` from
+    external/tinyalsa. Same `device.mk` lines.
+- SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server (power,
+  lights, sensors) and mediaserver (audio: `/dev/snd`, `usb_mux.0`, `pause_for_audio`) to use
+  `sysfs` and the device nodes on both trees.

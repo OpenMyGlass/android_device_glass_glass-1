@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_facts import facts_table
+from test_facts import facts_table, rc_commands
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ["audio/audio_logic.c", "tests/mock_tinyalsa.c", "tests/audio_logic_test.c"]
@@ -52,6 +52,9 @@ class AudioFilesTest(unittest.TestCase):
                 row = rows.get(paths[name])
                 self.assertIsNotNone(row, "not in the Sysfs facts")
                 self.assertEqual((row["User"], row["Mode"]), ("media", "0664"))
+                cmds = rc_commands("rootdir/init.omap4430.rc")
+                self.assertIn(["chown", "media", "media", paths[name]], cmds)
+                self.assertIn(["chmod", "0664", paths[name]], cmds)
 
     def test_policy(self):
         conf = (ROOT / "audio" / "audio_policy.conf").read_text()

@@ -51,6 +51,26 @@ GLASS_SAME(GLASS_SOURCE_VOICE_RECOGNITION, AUDIO_SOURCE_VOICE_RECOGNITION);
 /* Root of every sysfs path: empty on the device. */
 static const char sysfs_root[] = "";
 
+/*
+ * Locking. glass_dev.lock guards the mixer, the out/in pointers and voice_gain; each stream's
+ * lock guards that stream. When both are held, dev->lock is always taken first. A stream's
+ * standby flag (and its pcm) only changes with both locks held: starting (in out_write and
+ * in_read), standby, and parameter changes. So the write and read paths can test the flag with
+ * only the stream lock, and stream it with only that lock held; to leave standby they drop the
+ * stream lock, take dev->lock and then the stream lock again, and test the flag once more,
+ * since another thread may have changed it in between.
+ */
+
+/* Channel count of an input mask; 6.0 also has index masks, which a popcount would miscount. */
+static unsigned int in_channel_count(audio_channel_mask_t mask)
+{
+#ifdef AUDIO_DEVICE_API_VERSION_3_0
+    return audio_channel_count_from_in_mask(mask);
+#else
+    return (unsigned int)__builtin_popcount(mask);
+#endif
+}
+
 struct glass_out;
 struct glass_in;
 
@@ -322,14 +342,19 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer, si
     struct glass_dev *dev = out->dev;
     size_t frames = bytes / OUT_FRAME_SIZE;
     const void *data = buffer;
-    int ret;
+    int ret = 0;
 
-    pthread_mutex_lock(&dev->lock);
     pthread_mutex_lock(&out->lock);
-    ret = out->standby ? start_output_l(out) : 0;
-    pthread_mutex_unlock(&dev->lock);
-    if (ret)
-        goto error;
+    if (out->standby) {
+        /* Leaving standby needs dev->lock first (see Locking above). */
+        pthread_mutex_unlock(&out->lock);
+        pthread_mutex_lock(&dev->lock);
+        pthread_mutex_lock(&out->lock);
+        ret = out->standby ? start_output_l(out) : 0;
+        pthread_mutex_unlock(&dev->lock);
+        if (ret)
+            goto error;
+    }
 
     if (out->downmix) {
         ret = grow(&out->scratch, &out->scratch_frames, frames, 2);
@@ -565,14 +590,19 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer, size_t byte
     struct glass_dev *dev = in->dev;
     size_t frames = bytes / (in->channels * sizeof(int16_t));
     int16_t *dst = buffer;
-    int ret;
+    int ret = 0;
 
-    pthread_mutex_lock(&dev->lock);
     pthread_mutex_lock(&in->lock);
-    ret = in->standby ? start_input_l(in) : 0;
-    pthread_mutex_unlock(&dev->lock);
-    if (ret)
-        goto error;
+    if (in->standby) {
+        /* Leaving standby needs dev->lock first (see Locking above). */
+        pthread_mutex_unlock(&in->lock);
+        pthread_mutex_lock(&dev->lock);
+        pthread_mutex_lock(&in->lock);
+        ret = in->standby ? start_input_l(in) : 0;
+        pthread_mutex_unlock(&dev->lock);
+        if (ret)
+            goto error;
+    }
 
     if (in->channels == 1) {
         ret = grow(&in->stereo, &in->stereo_frames, frames, 2);
@@ -686,12 +716,17 @@ static int adev_set_parameters(struct audio_hw_device *hw, const char *kvpairs)
 
 static char *adev_get_parameters(const struct audio_hw_device *hw, const char *keys)
 {
-    const struct glass_dev *dev = (const struct glass_dev *)hw;
+    struct glass_dev *dev = (struct glass_dev *)hw;
     char reply[64] = "";
     size_t n = 0;
 
-    if (glass_param_has(keys, "voice_volume"))
-        n += snprintf(reply + n, sizeof(reply) - n, "voice_volume=%d", dev->voice_gain);
+    if (glass_param_has(keys, "voice_volume")) {
+        int gain;
+        pthread_mutex_lock(&dev->lock);
+        gain = dev->voice_gain;
+        pthread_mutex_unlock(&dev->lock);
+        n += snprintf(reply + n, sizeof(reply) - n, "voice_volume=%d", gain);
+    }
     if (glass_param_has(keys, "output_type")) {
         enum glass_headset h = read_headset();
         if (h == GLASS_HEADSET_UNREAD)
@@ -704,7 +739,7 @@ static char *adev_get_parameters(const struct audio_hw_device *hw, const char *k
 static size_t adev_get_input_buffer_size(const struct audio_hw_device *hw,
                                          const struct audio_config *config)
 {
-    unsigned int channels = __builtin_popcount(config->channel_mask);
+    unsigned int channels = in_channel_count(config->channel_mask);
 
     (void)hw;
     if (!glass_input_supported(config->sample_rate,
@@ -811,7 +846,7 @@ static int adev_open_input_stream(struct audio_hw_device *hw, audio_io_handle_t 
     struct glass_in *in;
     struct glass_pcm_params params;
     char value[PROPERTY_VALUE_MAX];
-    unsigned int channels = __builtin_popcount(config->channel_mask);
+    unsigned int channels = in_channel_count(config->channel_mask);
     int rate_prop;
 
     (void)handle;

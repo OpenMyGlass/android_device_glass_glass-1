@@ -53,13 +53,14 @@ All not run.
 All not run.
 
 - On both the 4.4 and the 6.0 build, `audio.primary.glass_1` loads: `logcat -s audio.primary.glass_1` shows "opened: card 0, playback device 0, capture device 2" and no "missing mixer control" line. Not run.
-- `tinymix` on card 0 shows the values of spec 4.2 after boot, among them `Earphone Playback Volume` 15, `Headset Playback Volume` 12, and the handsfree controls untouched. Not run.
-- With nothing plugged in, a notification sound plays on the bone conduction transducer (the TWL6040 EP output), at a level no louder than stock XE24 (spec 8, question 1; `Earphone Playback Volume` 15 is the stock value and the maximum). Not run.
+- `tinymix` on card 0 shows the values of spec 4.2 after boot, among them `Earphone Playback Volume` 12 (0 dB, 6 dB below stock), `Headset Playback Volume` 12, and the handsfree controls untouched. Not run.
+- With nothing plugged in, a notification sound plays on the bone conduction transducer (the TWL6040 EP output), at a level no louder than stock XE24, peaks included (spec 8, question 1). The default `Earphone Playback Volume` is 12 (0 dB), 6 dB below the stock 15, because the stock limiter stage is missing. Measure this build against stock at the same volume step; raising the default to 15 (the hard cap) is the owner's decision after that. Not run.
 - Playback through plain tinyalsa (`pcm_write`, no mmap) on device 0 works with the ABE firmware as this kernel loads it, without underruns in logcat (spec 8, question 3). Not run.
 - Media playback sounds acceptable on the transducer without the stock BCT equalisation; note whether an open EQ is needed (spec 8, question 4). Not run.
 - With a stereo earbud on the USB port, `cat /sys/devices/platform/usb_mux.0/headset` reads `Stereo`, playback is stereo on the earbud and silent on the transducer; with a mono earbud it reads `Mono` and plays a mono down-mix. Not run.
 - Plugging and unplugging an earbud during playback moves the sound within about a second (`id_monitor` polling, `h2w` switch, routing change). Not run.
-- With the USB cable connected, starting playback with an earbud detected leaves the USB connection working (`mux_mode` stays `usb`; spec 8, question 5). Not run.
+- After playing on an earbud and then removing it, `cat /sys/devices/platform/usb_mux.0/mux_mode` stays `audio` (the HAL never writes it back; stock does the same). Check that the transducer still plays, and that plugging the USB cable in afterwards switches the mux to `usb` and the device enumerates (spec 8, question 5). Not run.
+- With a voice-recognition input open (the "ok glass" hotword), a second app that starts recording gets no stream: the HAL has one input, so the second `open_input_stream` fails with `-ENOSYS`. Check how each Android version handles it (error to the app, or the hotword input closed first). Not run.
 - Recording (Camera video, a recorder app at 44100 and 48000 Hz, mono and stereo) captures both DMIC0 microphones at a sensible level with no click at the start; check which channel is which and whether it is front/back (spec 8, question 2). Not run.
 - 8000 and 16000 Hz capture (VoIP-type apps) works through the voice configs and the resampler. Not run.
 - While recording with a source other than voice recognition, `cat /sys/devices/platform/omap_i2c.4/i2c-4/4-0035/pause_for_audio` reads 1, and 0 after the recording stops. The "ok glass" hotword (voice recognition) leaves it at 0. Not run.

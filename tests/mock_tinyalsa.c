@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * A fake tinyalsa mixer for the host tests of audio/audio_logic.c: the four mixer calls it
+ * A fake tinyalsa mixer for the host tests of audio/audio_logic.c: the mixer calls it
  * makes, with the prototypes of audio/glass_tinyalsa.h, over a table of controls that the
  * test sets up. Each control records its values, and every successful set is counted.
  */
@@ -25,13 +25,25 @@ unsigned int mixer_ctl_get_num_values(struct mixer_ctl *ctl)
     return ctl->num_values;
 }
 
+/* Like tinyalsa: no range check, the value is stored as given. */
 int mixer_ctl_set_value(struct mixer_ctl *ctl, unsigned int id, int value)
 {
-    if (ctl->enums || id >= ctl->num_values || value < ctl->min || value > ctl->max)
+    if (ctl->enums || id >= ctl->num_values)
         return -EINVAL;
     ctl->values[id] = value;
     ctl->sets++;
     return 0;
+}
+
+/* Like tinyalsa: -EINVAL for a control that is not an integer one. */
+int mixer_ctl_get_range_min(struct mixer_ctl *ctl)
+{
+    return ctl->enums ? -EINVAL : ctl->min;
+}
+
+int mixer_ctl_get_range_max(struct mixer_ctl *ctl)
+{
+    return ctl->enums ? -EINVAL : ctl->max;
 }
 
 int mixer_ctl_set_enum_by_string(struct mixer_ctl *ctl, const char *string)

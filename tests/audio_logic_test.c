@@ -92,6 +92,11 @@ static void test_tables(void)
 {
     size_t i, j;
 
+    /* 12 is 0 dB (-24 dB + 2 dB x 12), 6 dB below the stock 15; 15 is the cap. */
+    CHECK(GLASS_EARPHONE_VOLUME_DEFAULT == 12 && GLASS_EARPHONE_VOLUME_MAX == 15);
+    CHECK(GLASS_EARPHONE_VOLUME_DEFAULT < GLASS_EARPHONE_VOLUME_MAX);
+    CHECK(GLASS_HEADSET_VOLUME_MAX == 12);
+
     /* Every control the HAL names is one the kernel card has. */
     CHECK(glass_mixer_missing(&notle) == 0);
     for (i = 0; i < glass_init_ctls_count; i++)
@@ -105,7 +110,7 @@ static void test_tables(void)
         const struct glass_ctl *c = &glass_init_ctls[i];
         CHECK(strncmp(c->name, "Handsfree", 9) != 0);
         if (!strcmp(c->name, "Earphone Playback Volume"))
-            CHECK(c->value == 15 && c->value <= GLASS_EARPHONE_VOLUME_MAX);
+            CHECK(c->value == GLASS_EARPHONE_VOLUME_DEFAULT);
         if (!strcmp(c->name, "Headset Playback Volume"))
             CHECK(c->value == 12 && c->value <= GLASS_HEADSET_VOLUME_MAX);
     }
@@ -120,7 +125,7 @@ static void test_mixer_apply(void)
     CHECK(glass_mixer_apply(&notle, glass_init_ctls, glass_init_ctls_count) == 0);
     /* Stock values (spec 4.2), on every channel. */
     CHECK(val("DL1 Media Playback Volume", 0) == 120);
-    CHECK(val("Earphone Playback Volume", 0) == 15);
+    CHECK(val("Earphone Playback Volume", 0) == 12);
     CHECK(val("Headset Playback Volume", 0) == 12 && val("Headset Playback Volume", 1) == 12);
     CHECK(val("DMIC1 UL Volume", 0) == 146 && val("DMIC1 UL Volume", 1) == 146);
     CHECK(val("BT UL Volume", 1) == 120);
@@ -155,7 +160,17 @@ static void test_mixer_apply(void)
     /* Gains go to both DMIC channels; out-of-range values fail. */
     CHECK(glass_mixer_set_int(&notle, GLASS_CTL_DMIC_GAIN, 140) == 0);
     CHECK(val("DMIC1 UL Volume", 0) == 140 && val("DMIC1 UL Volume", 1) == 140);
-    CHECK(glass_mixer_set_int(&notle, GLASS_CTL_DMIC_GAIN, 500) == -EINVAL);
+    /* Out-of-range values (a property, voice_volume=) are clamped to the control's range. */
+    CHECK(glass_mixer_set_int(&notle, GLASS_CTL_DMIC_GAIN, 500) == 0);
+    CHECK(val("DMIC1 UL Volume", 0) == 149 && val("DMIC1 UL Volume", 1) == 149);
+    CHECK(glass_mixer_set_int(&notle, GLASS_CTL_DMIC_GAIN, -40) == 0);
+    CHECK(val("DMIC1 UL Volume", 0) == 0 && val("DMIC1 UL Volume", 1) == 0);
+    CHECK(glass_mixer_set_int(&notle, GLASS_CTL_VOICE_GAIN, 1000) == 0);
+    CHECK(val(GLASS_CTL_VOICE_GAIN, 0) == 149);
+    CHECK(glass_mixer_set_int(&notle, "Earphone Playback Volume", -5) == 0);
+    CHECK(val("Earphone Playback Volume", 0) == 0);
+    /* Enum controls are not integers: setting one as an integer fails. */
+    CHECK(glass_mixer_set_int(&notle, "MUX_VX0", 1) == -EINVAL);
     CHECK(glass_mixer_set_int(&notle, "No Such Control", 1) == -ENOENT);
 
     /* A card without the Glass controls is refused; failures are counted. */

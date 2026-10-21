@@ -15,6 +15,8 @@ struct mixer_ctl *mixer_get_ctl_by_name(struct mixer *mixer, const char *name);
 unsigned int mixer_ctl_get_num_values(struct mixer_ctl *ctl);
 int mixer_ctl_set_value(struct mixer_ctl *ctl, unsigned int id, int value);
 int mixer_ctl_set_enum_by_string(struct mixer_ctl *ctl, const char *string);
+int mixer_ctl_get_range_min(struct mixer_ctl *ctl);
+int mixer_ctl_get_range_max(struct mixer_ctl *ctl);
 #else
 #include <tinyalsa/asoundlib.h>
 #endif

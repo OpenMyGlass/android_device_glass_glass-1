@@ -26,9 +26,17 @@
 #define GLASS_PAUSE_FOR_AUDIO_PATH \
     "/sys/devices/platform/omap_i2c.4/i2c-4/4-0035/pause_for_audio" /* media 0664 */
 
-/* The highest values the HAL ever writes: the stock ones (spec 4.2, rule 6). */
-#define GLASS_EARPHONE_VOLUME_MAX 15 /* TWL6040 EP, +6 dB */
-#define GLASS_HEADSET_VOLUME_MAX 12  /* TWL6040 HS, -6 dB */
+/*
+ * TWL6040 output gains (twl6040.c:612-624, 849-853): EP is -24 dB + 2 dB per step, HS -30 dB +
+ * 2 dB per step. The MAX values are the stock ones (spec 4.2) and the highest the HAL ever
+ * writes (rule 6). The earpiece default is 6 dB below stock, because this HAL has no
+ * equivalent of the stock limiter stage (spec 6) and the transducer sits against the temple.
+ * Raising it to the stock 15 is an owner decision once docs/device-checklist.md's "no louder
+ * than stock" row has been measured.
+ */
+#define GLASS_EARPHONE_VOLUME_DEFAULT 12 /* TWL6040 EP, 0 dB */
+#define GLASS_EARPHONE_VOLUME_MAX 15     /* TWL6040 EP, +6 dB: stock, hard cap */
+#define GLASS_HEADSET_VOLUME_MAX 12      /* TWL6040 HS, -6 dB: stock, default and cap */
 
 /* Capture gain defaults and the properties that override them (spec 4.4). */
 #define GLASS_DMIC_GAIN_DEFAULT 146  /* DMIC1 UL Volume, +26 dB */
@@ -97,13 +105,17 @@ extern const struct glass_pcm_params glass_out_params;
 int glass_mixer_missing(struct mixer *mixer);
 
 /*
- * Applies a table. Integer values go to every channel. An Earphone or Headset Playback
- * Volume above its GLASS_*_VOLUME_MAX is lowered to the maximum. Returns the number of
- * controls that are missing or could not be set.
+ * Applies a table: enum strings, or integers through glass_mixer_set_int. Returns the number
+ * of controls that are missing or could not be set.
  */
 int glass_mixer_apply(struct mixer *mixer, const struct glass_ctl *ctls, size_t count);
 
-/* Sets an integer control on every channel. Returns 0 or a negative errno. */
+/*
+ * Sets an integer control on every channel. The value is first lowered to
+ * GLASS_EARPHONE_VOLUME_MAX or GLASS_HEADSET_VOLUME_MAX for those two controls, then clamped
+ * to the control's own range (mixer_ctl_get_range_min/max) for integer controls, so property
+ * and parameter values cannot go out of range. Returns 0 or a negative errno.
+ */
 int glass_mixer_set_int(struct mixer *mixer, const char *name, int value);
 
 /* Parses the text of usb_mux.0/headset. NULL gives GLASS_HEADSET_UNREAD. */
