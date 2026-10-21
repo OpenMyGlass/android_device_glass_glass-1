@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Framework configuration for Glass (4.4.4 branch, docs/kitkat.md "Lean items"). -->
+<resources>
+    <!-- Wi-Fi only: no voice calls and no SMS. TeleService is not built (BoardConfig.mk), and
+         4.4's config.disable_telephony property is read by nothing. -->
+    <bool name="config_voice_capable">false</bool>
+    <bool name="config_sms_capable">false</bool>
+
+    <!-- No screen savers: the dream apps are not built. -->
+    <bool name="config_dreamsSupported">false</bool>
+</resources>
