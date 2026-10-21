@@ -284,6 +284,32 @@ void sns_gyrobias_init(struct sns_gyrobias *g);
  */
 int sns_gyrobias_add(struct sns_gyrobias *g, const float w[3], int64_t ts);
 
+/* ---- Event queue --------------------------------------------------------------------- */
+
+/*
+ * FIFO of fixed-size items, each marked as meta (a flush-complete event) or data. When it is
+ * full, the oldest data item is dropped to make room; meta items are never dropped, because
+ * SensorService waits for each flush it asked for. The caller provides the storage.
+ */
+struct sns_queue {
+    unsigned char *items;  /* cap * size bytes */
+    unsigned char *meta;   /* cap flags */
+    size_t size;
+    int cap, head, count;
+    unsigned dropped;      /* data items dropped so far */
+};
+
+void sns_queue_init(struct sns_queue *q, void *items, unsigned char *meta, size_t size, int cap);
+
+/*
+ * Appends item. Returns 0, 1 if the oldest data item was dropped to make room, or -1 if the
+ * queue holds only meta items and item was not added.
+ */
+int sns_queue_push(struct sns_queue *q, const void *item, int is_meta);
+
+/* Removes the oldest item into out. Returns 1, or 0 if the queue is empty. */
+int sns_queue_pop(struct sns_queue *q, void *out);
+
 /* ---- Files and discovery ------------------------------------------------------------- */
 
 /* Reads root+path into buf (NUL-terminated, trailing newline removed). Returns length or -errno. */
@@ -300,5 +326,8 @@ int sns_find_input(const char *root, const char *name, int *input_num, int *even
 
 /* Finds the IIO device called name under root/sys/bus/iio/devices. Returns its number or -ENOENT. */
 int sns_find_iio(const char *root, const char *name);
+
+/* Finds the IIO trigger called name (trigger<N>/name). Returns N or -ENOENT. */
+int sns_find_trigger(const char *root, const char *name);
 
 #endif

@@ -36,7 +36,8 @@
 #define IIO_NAME "mpu9150"           /* I2C_BOARD_INFO("mpu9150", 0x68), board-notle.c */
 #define ALS_NAME "ltr506_als"        /* ltr506als.c als_setup_input_device */
 #define ALS_I2C_ENABLE "/sys/devices/platform/omap_i2c.4/i2c-4/4-003a/als_enable"
-#define MAGCAL_FILE "/data/misc/sensors/glass_magcal.txt"
+#define MAGCAL_DIR "/data/misc/sensors"
+#define MAGCAL_FILE MAGCAL_DIR "/glass_magcal.txt"
 #define QUEUE_LEN 256
 #define OFFSET_REFRESH_NS (10LL * 1000000000LL)
 #define MAGCAL_SAVE_EVERY_NS (300LL * 1000000000LL)
@@ -87,13 +88,14 @@ struct glass_ctx {
     /* LTR-506ALS */
     int als_fd;
     char als_enable[64];
+    char als_adc[64];
     int als_clock_mono;
     int als_value;
     int als_pending;
 
     sensors_event_t queue[QUEUE_LEN];
-    int q_head, q_count;
-    unsigned dropped;
+    unsigned char queue_meta[QUEUE_LEN];
+    struct sns_queue q;
 };
 
 static int64_t now_ns(clockid_t clk)
@@ -142,16 +144,15 @@ static long long iio_read_ll(const struct glass_ctx *c, const char *rel, long lo
 
 /* ---- Event queue (lock held) --------------------------------------------------------- */
 
+/* Queues an event. A full queue drops its oldest data event, never a flush-complete. */
 static void push_event(struct glass_ctx *c, const sensors_event_t *ev)
 {
-    if (c->q_count == QUEUE_LEN) {
-        c->q_head = (c->q_head + 1) % QUEUE_LEN;
-        c->q_count--;
-        if (c->dropped++ % 1000 == 0)
-            ALOGW("event queue full, dropped %u events", c->dropped);
-    }
-    c->queue[(c->q_head + c->q_count) % QUEUE_LEN] = *ev;
-    c->q_count++;
+    int r = sns_queue_push(&c->q, ev, ev->type == SENSOR_TYPE_META_DATA);
+
+    if (r > 0 && c->q.dropped % 1000 == 1)
+        ALOGW("event queue full, dropped %u events", c->q.dropped);
+    else if (r < 0)
+        ALOGE("event queue full of flush events; dropped an event for sensor %d", ev->sensor);
 }
 
 static void new_event(sensors_event_t *ev, int handle, int64_t ts)
@@ -197,9 +198,18 @@ static void iio_init(struct glass_ctx *c)
     read_matrix(c, "gyro_matrix", c->gyro_m);
     read_matrix(c, "accl_matrix", c->accel_m);
     read_matrix(c, "compass_matrix", c->mag_m);
-    /* The driver names its trigger "<name>-dev<id>" (inv_mpu_trigger.c:67). */
-    if (sns_read_file(NULL, "/sys/bus/iio/devices/trigger0/name", c->trigger, sizeof(c->trigger)) <= 0)
-        snprintf(c->trigger, sizeof(c->trigger), "%s-dev%d", IIO_NAME, n);
+    /*
+     * The driver names its trigger "<name>-dev<id>" (inv_mpu_trigger.c:67). Look for it among
+     * the triggers; fall back to trigger0's name as stock does (spec §5.1), then to the name.
+     */
+    snprintf(c->trigger, sizeof(c->trigger), "%s-dev%d", IIO_NAME, n);
+    if (sns_find_trigger(NULL, c->trigger) < 0) {
+        char name[sizeof(c->trigger)];
+        if (sns_read_file(NULL, "/sys/bus/iio/devices/trigger0/name", name, sizeof(name)) > 0) {
+            ALOGW("no trigger named %s; using trigger0 (%s)", c->trigger, name);
+            snprintf(c->trigger, sizeof(c->trigger), "%s", name);
+        }
+    }
     c->iio_fd = open(node, O_RDONLY | O_NONBLOCK);
     if (c->iio_fd < 0)
         ALOGE("cannot open %s: %s", node, strerror(errno));
@@ -257,6 +267,19 @@ static void build_layout(struct glass_ctx *c)
     c->format = sns_expected_format(&c->cfg);
 }
 
+/* Discards records still in the kernel buffer, laid out for the previous configuration. */
+static void drain_iio(struct glass_ctx *c)
+{
+    uint8_t buf[512];
+    int i;
+
+    if (c->iio_fd < 0)
+        return;
+    /* Bounded: the buffer holds at most 480 records (buffer/length). */
+    for (i = 0; i < 64 && read(c->iio_fd, buf, sizeof(buf)) > 0; i++)
+        ;
+}
+
 static int run_plan(struct glass_ctx *c, const struct sns_iio_config *cfg)
 {
     struct sns_write w[SNS_MAX_WRITES];
@@ -269,6 +292,8 @@ static int run_plan(struct glass_ctx *c, const struct sns_iio_config *cfg)
         return -EINVAL;
     for (i = 0; i < n; i++) {
         err = iio_write(c, w[i].path, w[i].value);
+        if (strcmp(w[i].path, "buffer/enable") == 0 && strcmp(w[i].value, "0") == 0)
+            drain_iio(c);
         if (!err)
             continue;
         if (w[i].optional) {
@@ -336,6 +361,13 @@ static void save_magcal(struct glass_ctx *c)
         ALOGW("cannot save %s: %s", MAGCAL_FILE, strerror(errno));
         unlink(tmp);
         return;
+    }
+    /* Make the rename itself durable. */
+    fd = open(MAGCAL_DIR, O_RDONLY | O_DIRECTORY);
+    if (fd >= 0) {
+        if (fsync(fd))
+            ALOGW("cannot sync %s: %s", MAGCAL_DIR, strerror(errno));
+        close(fd);
     }
     c->magcal_dirty = 0;
     c->magcal_saved_at = now_ns(CLOCK_BOOTTIME);
@@ -465,6 +497,7 @@ static void als_init(struct glass_ctx *c)
     }
     snprintf(node, sizeof(node), "/dev/input/event%d", event);
     snprintf(c->als_enable, sizeof(c->als_enable), "/sys/class/input/input%d/als_enable", input);
+    snprintf(c->als_adc, sizeof(c->als_adc), "/sys/class/input/input%d/als_adc", input);
     c->als_fd = open(node, O_RDONLY | O_NONBLOCK);
     if (c->als_fd < 0) {
         ALOGE("cannot open %s: %s", node, strerror(errno));
@@ -490,6 +523,36 @@ static int als_set(struct glass_ctx *c, int on)
     if (err)
         ALOGE("cannot write %s to %s: %s", v, c->als_enable, strerror(-err));
     return err;
+}
+
+/*
+ * First event after enabling: the input core drops an ABS_MISC value equal to the last one
+ * (input.c:198-202, input_handle_abs_event), so an unchanged light level would give no event at all. Read the
+ * current value from als_adc (ADC counts, the unit of the events; 0666, ltr506als.c:1100-1113);
+ * failing that, the input device's last reported value (EVIOCGABS), if it ever reported one.
+ */
+static void als_initial_event(struct glass_ctx *c)
+{
+    struct input_absinfo abs;
+    sensors_event_t ev;
+    char buf[32];
+    long long v = -1;
+    int64_t now;
+
+    if (sns_read_file(NULL, c->als_adc, buf, sizeof(buf)) < 0 || sns_parse_ll(buf, &v) || v < 0) {
+        v = -1;
+        if (ioctl(c->als_fd, EVIOCGABS(ABS_MISC), &abs) == 0 && abs.value > 0)
+            v = abs.value;
+    }
+    if (v < 0) {
+        ALOGW("no current light value; the first event comes with the next change");
+        return;
+    }
+    now = now_ns(CLOCK_BOOTTIME);
+    new_event(&ev, SNS_HANDLE_LIGHT, stamp(c, SNS_HANDLE_LIGHT, now, now));
+    ev.light = (float)v;
+    push_event(c, &ev);
+    pthread_cond_broadcast(&c->cond);
 }
 
 static void read_als(struct glass_ctx *c)
@@ -545,12 +608,12 @@ static void *reader(void *arg)
             pthread_mutex_unlock(&c->lock);
             break;
         }
-        queued = c->q_count;
+        queued = c->q.count;
         if (fds[1].revents & POLLIN)
             failed = read_iio(c);
         if (fds[2].revents & POLLIN)
             read_als(c);
-        if (c->q_count != queued)
+        if (c->q.count != queued)
             pthread_cond_broadcast(&c->cond);
         pthread_mutex_unlock(&c->lock);
         if (failed || ((fds[1].revents | fds[2].revents) & (POLLERR | POLLHUP | POLLNVAL)))
@@ -568,10 +631,20 @@ static struct glass_ctx *ctx_of(void *dev)
 
 static int set_delay_locked(struct glass_ctx *c, int handle, int64_t ns)
 {
+    int64_t old = c->delay[handle];
+    int err;
+
     c->delay[handle] = ns > 0 ? ns : DEFAULT_DELAY_NS;
     if (handle == SNS_HANDLE_LIGHT || !c->enabled[handle])
         return 0;
-    return apply_config(c);
+    err = apply_config(c);
+    if (err) {
+        /* apply_config switched the IIO side off: restore the old rate and turn it back on. */
+        c->delay[handle] = old;
+        if (apply_config(c))
+            ALOGE("cannot restore the motion sensors after a failed rate change");
+    }
+    return err;
 }
 
 static int dev_activate(struct sensors_poll_device_t *dev, int handle, int enabled)
@@ -587,6 +660,8 @@ static int dev_activate(struct sensors_poll_device_t *dev, int handle, int enabl
     if (handle == SNS_HANDLE_LIGHT) {
         err = was == c->enabled[handle] ? 0 : als_set(c, c->enabled[handle]);
         c->als_pending = 0;
+        if (!err && !was && c->enabled[handle])
+            als_initial_event(c);
     } else {
         err = apply_config(c);
     }
@@ -631,6 +706,7 @@ static int dev_flush(struct sensors_poll_device_1 *dev, int handle)
 {
     struct glass_ctx *c = ctx_of(dev);
     sensors_event_t ev;
+    int err;
 
     if (!sns_find(handle))
         return -EINVAL;
@@ -645,10 +721,10 @@ static int dev_flush(struct sensors_poll_device_1 *dev, int handle)
     ev.sensor = 0;
     ev.meta_data.what = META_DATA_FLUSH_COMPLETE;
     ev.meta_data.sensor = handle;
-    push_event(c, &ev);
+    err = sns_queue_push(&c->q, &ev, 1) < 0 ? -ENOMEM : 0;
     pthread_cond_broadcast(&c->cond);
     pthread_mutex_unlock(&c->lock);
-    return 0;
+    return err;
 }
 
 static int dev_poll(struct sensors_poll_device_t *dev, sensors_event_t *data, int count)
@@ -659,13 +735,10 @@ static int dev_poll(struct sensors_poll_device_t *dev, sensors_event_t *data, in
     if (count <= 0)
         return -EINVAL;
     pthread_mutex_lock(&c->lock);
-    while (!c->q_count && !c->stop)
+    while (!c->q.count && !c->stop)
         pthread_cond_wait(&c->cond, &c->lock);
-    while (n < count && c->q_count) {
-        data[n++] = c->queue[c->q_head];
-        c->q_head = (c->q_head + 1) % QUEUE_LEN;
-        c->q_count--;
-    }
+    while (n < count && sns_queue_pop(&c->q, &data[n]))
+        n++;
     pthread_mutex_unlock(&c->lock);
     return n;
 }
@@ -738,6 +811,7 @@ static int open_sensors(const struct hw_module_t *module, const char *name,
 
     sns_magcal_init(&c->magcal);
     sns_gyrobias_init(&c->gbias);
+    sns_queue_init(&c->q, c->queue, c->queue_meta, sizeof(c->queue[0]), QUEUE_LEN);
     if (sns_read_file(NULL, MAGCAL_FILE, text, sizeof(text)) > 0) {
         if (sns_magcal_parse(&c->magcal, text) == 0)
             ALOGI("loaded hard-iron bias %.1f %.1f %.1f uT", c->magcal.bias[0],
