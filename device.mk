@@ -36,9 +36,12 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/fstab.omap4430:root/fstab.omap4430
 
+# Media (docs/media-facts.md). media_codecs.xml includes the release's software codec lists.
 PRODUCT_COPY_FILES += \
     device/glass/glass-1/media_codecs.xml:system/etc/media_codecs.xml \
-    device/glass/glass-1/media_profiles.xml:system/etc/media_profiles.xml
+    device/glass/glass-1/media_profiles.xml:system/etc/media_profiles.xml \
+    frameworks/av/media/libstagefright/data/media_codecs_google_audio.xml:system/etc/media_codecs_google_audio.xml \
+    frameworks/av/media/libstagefright/data/media_codecs_google_video.xml:system/etc/media_codecs_google_video.xml
 
 # Hardware-specific features
 PRODUCT_COPY_FILES += \

@@ -373,14 +373,17 @@ All paths are under /sys/class/android_usb.
 | /data/gps | 0770 | system | system | XE24 ramdisk, Justin 6.0 tree |
 | /data/gps/nvm | 0770 | system | system | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/audio | 0664 | system | system | XE24 ramdisk, Justin 6.0 tree |
+| /data/misc/camera | 0770 | media | media | OMAP4-AOSP camera HAL and DOMX (`DCC_PATH`; not in XE24, see `docs/hals.md`, Camera) |
 | /data/misc/dhcp | 0770 | dhcp | dhcp | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/gcam | 0770 | media | camera | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/sensors | 0770 | system | system | This tree: the open sensors HAL keeps its magnetometer calibration there (docs/hals.md). Not in XE24, whose MPL library wrote /data/inv_cal_data.bin (docs/specs/sensors.md §5.5) |
 | /data/misc/wifi | 0770 | wifi | wifi | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/wifi/sockets | 0770 | wifi | wifi | XE24 ramdisk, Justin 6.0 tree |
 
-The stock files create these `on boot`, except /data/misc/sensors, which only this tree has.
-`init.omap4430.rc` creates all of them `on boot` (checked by `tests/test_facts.py`).
+The stock files create these `on boot`, except /data/misc/sensors and /data/misc/camera, which
+only this tree has. `init.omap4430.rc` creates all of them `on boot` (checked by
+`tests/test_facts.py`). TI's camera HAL and the DOMX camera proxy, both running in mediaserver
+(user media), read and save the camera tuning (DCC) files in /data/misc/camera.
 
 ## Sysfs writes
 
