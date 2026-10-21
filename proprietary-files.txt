@@ -7,7 +7,6 @@ vendor/firmware/bcm4330.hcd
 vendor/firmware/fw_bcmdhd.bin
 
 # Ducati and DSP firmware
-vendor/firmware/NVM2
 vendor/firmware/ducati-m3-core0-2gb.xem3
 vendor/firmware/ducati-m3-core0.xem3
 vendor/firmware/glasshub.s19
@@ -33,7 +32,6 @@ vendor/lib/libusc_SGX540_120.so
 
 # HALs
 lib/hw/audio.primary.glass_1.so
-lib/hw/gps.omap4.so
 lib/hw/sensors.glass_1.so
 vendor/lib/hw/gralloc.omap4430.so
 
