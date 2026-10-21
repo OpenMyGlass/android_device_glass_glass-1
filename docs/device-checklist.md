@@ -22,7 +22,7 @@ All not run.
 - On both builds, `lights.glass_1` loads, and the settings brightness slider changes `/sys/devices/platform/omapdss/manager2/panel-notle-dpi/brightness` (0-255) and the visible brightness. Not run.
 - Screen off writes 0 and turns the backlight off. Screen on restores the previous value. Not run.
 - With the default `brightness_limit`, writing 223 and then 255 to `brightness` gives the same visible brightness, as the driver code predicts. If so, the owner decides whether the slider should map to 0-223. Not run.
-- No light other than the backlight is requested without an error in logcat: `LightsService` handles the `-EINVAL`. Not run.
+- Requesting any light other than the backlight fails quietly: the HAL returns `-EINVAL` and `LightsService` ignores that light, with no crash in logcat. Not run.
 
 ## GPS (`docs/hals.md`, No GPS HAL)
 
