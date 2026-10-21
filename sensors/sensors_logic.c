@@ -764,6 +764,59 @@ int sns_gyrobias_add(struct sns_gyrobias *g, const float w[3], int64_t ts)
     return 1;
 }
 
+/* ---- Event queue --------------------------------------------------------------------- */
+
+void sns_queue_init(struct sns_queue *q, void *items, unsigned char *meta, size_t size, int cap)
+{
+    memset(q, 0, sizeof(*q));
+    q->items = items;
+    q->meta = meta;
+    q->size = size;
+    q->cap = cap;
+}
+
+static int slot(const struct sns_queue *q, int pos)
+{
+    return (q->head + pos) % q->cap;
+}
+
+int sns_queue_push(struct sns_queue *q, const void *item, int is_meta)
+{
+    int dropped = 0, pos, j;
+
+    if (q->count == q->cap) {
+        for (pos = 0; pos < q->count && q->meta[slot(q, pos)]; pos++)
+            ;
+        if (pos == q->count)
+            return -1;
+        /* Close the gap at pos by moving the older items up one slot, keeping their order. */
+        for (j = pos; j > 0; j--) {
+            memcpy(q->items + (size_t)slot(q, j) * q->size,
+                   q->items + (size_t)slot(q, j - 1) * q->size, q->size);
+            q->meta[slot(q, j)] = q->meta[slot(q, j - 1)];
+        }
+        q->head = slot(q, 1);
+        q->count--;
+        q->dropped++;
+        dropped = 1;
+    }
+    pos = slot(q, q->count);
+    memcpy(q->items + (size_t)pos * q->size, item, q->size);
+    q->meta[pos] = (unsigned char)!!is_meta;
+    q->count++;
+    return dropped;
+}
+
+int sns_queue_pop(struct sns_queue *q, void *out)
+{
+    if (!q->count)
+        return 0;
+    memcpy(out, q->items + (size_t)q->head * q->size, q->size);
+    q->head = slot(q, 1);
+    q->count--;
+    return 1;
+}
+
 /* ---- Files and discovery ------------------------------------------------------------- */
 
 static void join(char *out, size_t len, const char *root, const char *path)
@@ -878,6 +931,29 @@ int sns_find_iio(const char *root, const char *name)
         return -ENOENT;
     while (found < 0 && (e = readdir(d)) != NULL) {
         int n = numbered(e->d_name, "iio:device");
+        if (n < 0)
+            continue;
+        snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/name", e->d_name);
+        if (sns_read_file(root, path, buf, sizeof(buf)) >= 0 && strcmp(buf, name) == 0)
+            found = n;
+    }
+    closedir(d);
+    return found;
+}
+
+int sns_find_trigger(const char *root, const char *name)
+{
+    char dir[256], path[sizeof(dir) + 2 * 256], buf[64];
+    struct dirent *e;
+    DIR *d;
+    int found = -ENOENT;
+
+    join(dir, sizeof(dir), root, "/sys/bus/iio/devices");
+    d = opendir(dir);
+    if (!d)
+        return -ENOENT;
+    while (found < 0 && (e = readdir(d)) != NULL) {
+        int n = numbered(e->d_name, "trigger");
         if (n < 0)
             continue;
         snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/name", e->d_name);

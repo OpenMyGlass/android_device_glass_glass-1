@@ -649,6 +649,66 @@ static void test_gyrobias(void)
     CHECK(!changed);
 }
 
+/* ---- Event queue --------------------------------------------------------------------- */
+
+static void test_queue(void)
+{
+    int items[4], out, i;
+    unsigned char meta[4];
+    struct sns_queue q;
+
+    sns_queue_init(&q, items, meta, sizeof(items[0]), 4);
+    CHECK(sns_queue_pop(&q, &out) == 0);
+    for (i = 1; i <= 4; i++)
+        CHECK(sns_queue_push(&q, &i, 0) == 0);
+    /* Full of data: the oldest goes. */
+    i = 5;
+    CHECK(sns_queue_push(&q, &i, 0) == 1 && q.dropped == 1 && q.count == 4);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 2);
+    /* 3 4 5 + flush(100): full again. */
+    i = 100;
+    CHECK(sns_queue_push(&q, &i, 1) == 0);
+    /* Two more data items: 3 then 4 go, the flush stays, order is kept. */
+    i = 6;
+    CHECK(sns_queue_push(&q, &i, 0) == 1);
+    i = 7;
+    CHECK(sns_queue_push(&q, &i, 0) == 1);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 5);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 100);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 6);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 7);
+    CHECK(sns_queue_pop(&q, &out) == 0 && q.dropped == 3);
+
+    /* Flushes at the head are skipped: the first data item behind them goes. */
+    sns_queue_init(&q, items, meta, sizeof(items[0]), 4);
+    i = 101; sns_queue_push(&q, &i, 1);
+    i = 102; sns_queue_push(&q, &i, 1);
+    i = 1; sns_queue_push(&q, &i, 0);
+    i = 2; sns_queue_push(&q, &i, 0);
+    i = 103;
+    CHECK(sns_queue_push(&q, &i, 1) == 1);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 101);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 102);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 2);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 103);
+
+    /* Only flushes: nothing is evicted, the new item is refused. */
+    sns_queue_init(&q, items, meta, sizeof(items[0]), 4);
+    for (i = 0; i < 4; i++)
+        CHECK(sns_queue_push(&q, &i, 1) == 0);
+    i = 9;
+    CHECK(sns_queue_push(&q, &i, 0) == -1 && q.count == 4);
+    CHECK(sns_queue_push(&q, &i, 1) == -1);
+    CHECK(sns_queue_pop(&q, &out) == 1 && out == 0);
+
+    /* Wrap-around keeps order. */
+    sns_queue_init(&q, items, meta, sizeof(items[0]), 4);
+    for (i = 0; i < 10; i++) {
+        CHECK(sns_queue_push(&q, &i, 0) == 0);
+        CHECK(sns_queue_pop(&q, &out) == 1 && out == i);
+    }
+}
+
 /* ---- Discovery ----------------------------------------------------------------------- */
 
 static void test_discovery(void)
@@ -682,6 +742,10 @@ static void test_discovery(void)
     put(root, "/sys/bus/iio/devices/iio:device1/name", "mpu9150\n");
     CHECK(sns_find_iio(root, "mpu9150") == 1);
     CHECK(sns_find_iio(root, "mpu6050") == -ENOENT);
+    CHECK(sns_find_trigger(root, "mpu9150-dev1") == 0);
+    put(root, "/sys/bus/iio/devices/trigger3/name", "mpu9150-dev0\n");
+    CHECK(sns_find_trigger(root, "mpu9150-dev0") == 3);
+    CHECK(sns_find_trigger(root, "mpu9150-dev2") == -ENOENT);
 
     CHECK(sns_read_file(root, "/sys/class/input/input5/name", buf, sizeof(buf)) == 7);
     CHECK(strcmp(buf, "ltr506_") == 0); /* truncated to the buffer */
@@ -707,6 +771,7 @@ int main(int argc, char **argv)
     test_sphere_fit();
     test_magcal();
     test_gyrobias();
+    test_queue();
     test_discovery();
     if (failures) {
         fprintf(stderr, "%d check(s) failed\n", failures);

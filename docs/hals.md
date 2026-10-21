@@ -230,21 +230,26 @@ finding the devices by name). `sensors/sensors.c` is the HAL glue: files, thread
 ### Data path
 
 - One reader thread polls `/dev/iio:deviceN`, the ALS event node and a wake pipe, and puts events in
-  a 256-entry queue (the oldest is dropped when it is full, with a log line). `poll()` waits on the
-  queue. `flush()` queues `META_DATA_FLUSH_COMPLETE` behind the events already there, and returns
-  `-EINVAL` for a sensor that is not enabled. `batch()` accepts only a zero timeout, as stock
+  a 256-entry queue (`sns_queue_*`). When it is full, the oldest data event is dropped, with a log
+  line; a `META_DATA_FLUSH_COMPLETE` is never dropped, because SensorService holds a connection's
+  events until the flush it asked for arrives. `poll()` waits on the queue. `flush()` queues
+  `META_DATA_FLUSH_COMPLETE` behind the events already there, and returns `-EINVAL` for a sensor
+  that is not enabled (`-ENOMEM` if the queue holds nothing but flushes). `batch()` accepts only a zero timeout, as stock
   (spec §2); 4.4's and 6.0's `SystemSensorManager` then retry in continuous mode ("Try continuous
   mode if batching fails").
 - The IIO device is found by its `name`, `mpu9150` (`board-notle.c:1742`), not assumed to be
-  `iio:device0`. The trigger name is read from `trigger0/name`, falling back to `<name>-dev<N>`
-  (`inv_mpu_trigger.c:67`).
+  `iio:device0`. Its trigger is the one named `<name>-dev<N>` (`inv_mpu_trigger.c:67`), looked up
+  among `trigger*/name`; if none matches, `trigger0`'s name is used, as stock does (spec §5.1).
 - Enable sequence (`sns_plan_iio`, spec §4.6): `power_state` 1, `buffer/enable` 0, `dmp_on` 0 only
   if `firmware_loaded` is 1, `gyro_enable`, `accl_enable`, `compass_enable`, `in_anglvel_scale` 3
   and `in_accel_scale` 0 (index form: ±2000 °/s and ±2 g, the probe defaults), `sampling_frequency`,
   every `scan_elements/*_en` (quaternion off, all three axes of each enabled sensor, timestamp on),
   `trigger/current_trigger`, `buffer/length` 480, `buffer/enable` 1. With nothing enabled:
-  `buffer/enable` 0 and `power_state` 0. A failed required write switches the IIO side off and
-  fails the `activate`.
+  `buffer/enable` 0 and `power_state` 0. Right after every `buffer/enable` 0 the HAL reads the
+  device node until it is empty, so no record of the old layout is parsed with the new one. A
+  failed required write switches the IIO side off and fails the `activate` or `setDelay`/`batch`;
+  the HAL then restores the previous enabled set or rate and re-applies it, so its state and the
+  driver's agree.
 - Rate: the fastest requested rate among enabled motion sensors, rounded up to whole Hz, clamped to
   4-200 Hz (100 Hz for the compass alone). With the compass on, a rate above 100 Hz becomes 200 Hz:
   the driver reads the compass every `10 × rate / 1000` samples (`inv_mpu_core.c:655-659`), which at
@@ -292,7 +297,9 @@ strictly.
   samples, if every axis' standard deviation is at most 0.004 rad/s (about 4 LSB) and the mean is
   under 0.35 rad/s, the mean becomes the bias. GYROSCOPE reports raw minus bias (accuracy MEDIUM
   until a first bias, then HIGH); GYROSCOPE_UNCALIBRATED reports raw and the bias. The bias is not
-  saved. The framework's fusion also estimates its own gyro drift.
+  saved. The framework's fusion also estimates its own gyro drift. With 20 samples per 2 s window it
+  needs a gyro rate of 10 Hz or more: at SENSOR_DELAY_NORMAL (5 Hz) with nothing faster enabled it
+  never runs, and GYROSCOPE stays raw (accuracy MEDIUM).
 - Accelerometer: none.
 
 ### Light
@@ -304,6 +311,15 @@ assumed (spec §6). `als_enable` is written on activate and deactivate, through
 `/sys/devices/platform/omap_i2c.4/i2c-4/4-003a/als_enable` (same handler). The value is reported as
 lux without scaling, as stock (spec §6): no lux factor is known yet. One event per `SYN_REPORT` that
 follows an `ABS_MISC`.
+
+The input core drops an `ABS_MISC` value equal to the previous one (`input.c:198-202`), so an
+unchanged light level would give no event after `activate`. The HAL therefore queues one event on
+activate, from the input device's `als_adc` (ADC counts, the events' unit, mode 0666,
+`ltr506als.c:1100-1113`), or, if that read fails, from the last value the input device reported
+(`EVIOCGABS(ABS_MISC)`, when non-zero). On the part ID that needs the proximity workaround (0x90,
+`ltr506als.c:1860-1861`) the driver reports channel 1 in events (`ltr506als.c:527-529`) while
+`als_adc` reads the combined value, so that first event may differ in scale from the next ones (device
+checklist).
 
 ### Permissions
 
@@ -345,7 +361,8 @@ switch. `permissions/hardware.xml` does not declare it.
   `dmp_output_rate` and the GLU/TAP attributes are not written: no DMP.
 - ALS: enabled only while the light sensor is active (stock enables it at construction and keeps it
   on, spec §6). Events carry `CLOCK_BOOTTIME`, not the stock `CLOCK_REALTIME`, and IIO events too
-  (spec §4.5 recommends this).
+  (spec §4.5 recommends this). Activating the light sensor queues one event with the current value
+  (see Light); stock waits for the next change.
 - Names and vendors are the parts' ("MPU-9150 Accelerometer", "InvenSense"; "AK8975
   Magnetometer", "AKM"; "LTR-506ALS Light", "LiteOn"), not the stock "MPL ..." names. Power figures
   are the stock ones, including 0.0 mA for the accelerometer.
@@ -357,7 +374,10 @@ switch. `permissions/hardware.xml` does not declare it.
   must not ship. Options: leave them out (current), let a user load their own image at runtime, or
   write a software look-up detector on the accelerometer later.
 - Light: a lux factor needs a measurement against a lux meter (spec §9 question 4).
-- Gyro bias at rest is on; set `GLASS_GYRO_BIAS_AT_REST` to 0 to report raw gyro data.
+- Gyro bias at rest is on; set `GLASS_GYRO_BIAS_AT_REST` to 0 to report raw gyro data. It needs a
+  gyro rate of 10 Hz or more and never runs at SENSOR_DELAY_NORMAL. Options: keep it as is, lower
+  `SNS_GYRO_REST_MIN_SAMPLES` (a 5 Hz window has 10 samples, a noisier estimate), or save the bias
+  like the compass's so a slow client gets the last one found.
 
 ### Sensors: what a 4.4 branch needs
 
