@@ -75,8 +75,7 @@ GLASS_REMOVED_PACKAGES := \
     BasicDreams Browser Calculator Calendar Camera2 Contacts DeskClock Email Exchange2 \
     Galaxy4 Gallery2 HoloSpiralWallpaper LatinIME Launcher2 LiveWallpapers \
     LiveWallpapersPicker MagicSmokeWallpapers Music NoiseField OneTimeInitializer OpenWnn \
-    PhaseBeam PhotoTable PinyinIME PrintSpooler QuickSearchBox TeleService \
-    TelephonyProvider VideoEditor VisualizationWallpapers WAPPushManager WallpaperCropper \
+    PhaseBeam PhotoTable PinyinIME QuickSearchBox VideoEditor VisualizationWallpapers WAPPushManager WallpaperCropper \
     libWnnEngDic libWnnJpnDic libwnndict
 PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGES := \
     $(filter-out $(GLASS_REMOVED_PACKAGES),$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGES))

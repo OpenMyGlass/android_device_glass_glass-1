@@ -2,10 +2,22 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Framework configuration for Glass (4.4.4 branch, docs/kitkat.md "Lean items"). -->
 <resources>
-    <!-- Wi-Fi only: no voice calls and no SMS. TeleService is not built (BoardConfig.mk), and
-         4.4's config.disable_telephony property is read by nothing. -->
+    <!-- Wi-Fi only: no voice calls and no SMS. 4.4's SystemServer reads config.disable_telephony
+         but never uses it. TeleService stays built: Settings' About > Status runs in the
+         com.android.phone process and needs it. -->
     <bool name="config_voice_capable">false</bool>
     <bool name="config_sms_capable">false</bool>
+
+    <!-- Networks Glass has: no mobile data (as AOSP's Wi-Fi-only grouper overlay). Without a
+         "mobile" entry Settings treats the device as Wi-Fi only. -->
+    <string-array translatable="false" name="networkAttributes">
+        <item>"wifi,1,1,2,-1,true"</item>
+        <item>"bluetooth,7,7,0,-1,true"</item>
+    </string-array>
+    <string-array translatable="false" name="radioAttributes">
+        <item>"1,1"</item>
+        <item>"7,1"</item>
+    </string-array>
 
     <!-- No screen savers: the dream apps are not built. -->
     <bool name="config_dreamsSupported">false</bool>

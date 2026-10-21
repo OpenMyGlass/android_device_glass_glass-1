@@ -101,6 +101,7 @@ class KitKatTreeTest(unittest.TestCase):
         text = (ROOT / "overlay/frameworks/base/core/res/res/values/config.xml").read_text()
         for name in ("config_voice_capable", "config_sms_capable", "config_dreamsSupported"):
             self.assertIn(f'<bool name="{name}">false</bool>', text)
+        self.assertNotIn('"mobile', text)
         lines = code("device.mk")
         self.assertIn("$(call inherit-product, frameworks/native/build/phone-hdpi-512-dalvik-heap.mk)",
                       lines)
@@ -122,16 +123,17 @@ class RemovedPackagesTest(unittest.TestCase):
             "all:\n\t@echo '$(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGES))'\n")
         r = subprocess.run(["make", "-s", "-f", "t.mk"], cwd=tmp, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.split(), ["Settings", "Home", "SystemUI"])
+        self.assertEqual(r.stdout.split(), ["Settings", "TeleService", "Home", "SystemUI"])
 
     def test_keeps_what_the_system_needs(self):
         text = (ROOT / "BoardConfig.mk").read_text()
         block = text[text.index("GLASS_REMOVED_PACKAGES :="):text.index("PRODUCTS.$(INTERNAL")]
         removed = set(block.replace("\\", " ").split()[2:])
         for keep in ("Home", "Settings", "SystemUI", "Keyguard", "Bluetooth", "PackageInstaller",
-                     "DocumentsUI", "DownloadProviderUi", "Provision", "ContactsProvider"):
+                     "DocumentsUI", "DownloadProviderUi", "Provision", "ContactsProvider",
+                     "TeleService", "TelephonyProvider", "PrintSpooler"):
             self.assertNotIn(keep, removed)
-        self.assertIn("TeleService", removed)
+        self.assertIn("Browser", removed)
 
 
 @unittest.skipUnless(shutil.which("make"), "needs make")
