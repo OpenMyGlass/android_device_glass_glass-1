@@ -25,6 +25,20 @@ manifest's `docs/kitkat-base.md`.
   `GLASS_NO_KERNEL=true`, which also sets `TARGET_NO_KERNEL`: the build then makes a system image
   only, with no boot or recovery image. `tools/fetch-pvr.sh`, `tools/pvr.env` and
   `tests/test_pvr.py` are gone from this branch for the same reason.
+
+  omap4-aosp's build fork still runs `core/tasks/kernel.mk`, which builds a kernel from
+  `TARGET_KERNEL_SOURCE` (default `kernel/glass/glass-1`) when that directory exists.
+  `BoardConfig.mk` points it at a path that never exists, so the task only prints its "prebuilt
+  kernel" deprecation warnings.
+
+  `tuned-stable` is 3.4.113 plus glass-kernel's tuning (interactive governor values, touchpad
+  input boost). OPPs, voltages and thermal limits are unchanged (glass-kernel
+  `docs/tuning.md`), but it has not run on hardware either. For the first boot test, building
+  with `GLASS_KERNEL_VARIANT=stock` in the manifest's `tools/kernel.env` separates kernel problems
+  from Android ones. That is a decision for whoever runs the first boot.
+- **pvrsrvinit link order.** `Android.mk` makes the link of hardware/ti/omap4's `pvrsrvinit`
+  wait for the two PowerVR libraries it links from `/system/vendor/lib`. Only its phony target
+  depended on them, so a parallel build could link first.
 - **bltsville.** With `TI_OMAP_USE_BLTSVILLE := true`, omap4-aosp's `hardware/ti/omap4`
   installs these into `/system/vendor/lib`:
   - `libbltsville_ticpu.2.1.0.0.so` and its licence file, shipped as a TI binary in that
@@ -65,8 +79,12 @@ manifest's `docs/kitkat-base.md`.
   and `persist.glass.d2o.usr=space` (user apps). installd passes them as
   `--runtime-arg -compiler-filter:<filter>`. A line `<package> <filter>` in
   `/data/system/glass-dex2oat-filters` overrides them for one package: for example
-  `com.example interpret-only` for an app that dex2oat fails on. The boot image keeps dex2oat's
-  own default for images, `everything`.
+  `com.example interpret-only` for an app that dex2oat fails on; for system APKs the key is the
+  file name (`Settings`), since installd only sees the path. The boot image keeps dex2oat's
+  own default for images, `everything`. 4.4's dex2oat compiles dex files of 900 methods or fewer
+  with `speed` unless the filter is `interpret-only`, so `space` only changes larger apps, and
+  compiles the runtime starts itself (after `/data/dalvik-cache` is wiped, or for a
+  `DexClassLoader`) use the runtime's default filter.
 
 ## 4.4 versus 6.0, for the files shared with the 6.0.1 branch
 
@@ -114,7 +132,7 @@ All not run (no hardware). Use `fastboot boot` only; never flash `bootloader`, `
 - `ls /system/lib/libdvm.so /system/bin/dexopt` finds neither, and `logcat` has no
   JniInvocation `Falling back` line.
 - Developer options show no "Select runtime" entry.
-- Installing an APK logs `dex2oat` with `-compiler-filter:space`; `dumpsys meminfo` works.
+- Installing an APK logs `installd: Running /system/bin/dex2oat ... filter=space`; `dumpsys meminfo` works.
 - Time from `fastboot boot` to `sys.boot_completed=1` on the first boot, and the size of
   `/data/dalvik-cache` (plan Task 3).
 - Storage: `getprop | grep -i storage` and `echo $EXTERNAL_STORAGE` (adb shell) show
