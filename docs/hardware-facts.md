@@ -405,11 +405,11 @@ The boost writes hold the CPU at a higher clock for the first 30 seconds of boot
 | on boot | mount debugfs at /sys/kernel/debug, before the /sys/kernel/debug rows of Sysfs | XE24 ramdisk, Justin 6.0 tree |
 | on boot | /dev/fd is a symlink to /proc/self/fd | XE24 ramdisk, Justin 6.0 tree |
 
-The SGX kernel module is built by `BoardConfig.mk` from IMG DDK `1.9@2166536`
+The SGX kernel module comes from glass-kernel, which builds it from IMG DDK `1.9@2166536`
 (KFire-Android/android_vendor_amazon_otter, `proprietary/imgtec/eurasia_km`, dual
-MIT/GPL-2.0, pinned in `tools/pvr.env` and fetched by `tools/fetch-pvr.sh`), with
-glass-kernel's build options. XE24's user-space libraries are that DDK build; the
-Justin 6.0 tree built OMAP4-AOSP `pvr-source` (`1.9@2291151`) instead. XE24 shipped
+MIT/GPL-2.0) next to the kernel it loads into (variant `tuned-stable`). `device.mk` installs
+both from `GLASS_KERNEL_DIR` (see `docs/kitkat.md`). XE24's user-space libraries are that DDK
+build; the Justin 6.0 tree built OMAP4-AOSP `pvr-source` (`1.9@2291151`) instead. XE24 shipped
 its own copy in /system/lib/modules; the tree does not extract it.
 
 ## Left out
