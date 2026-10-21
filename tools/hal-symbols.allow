@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Undefined symbols tools/build-hals.py accepts from Android system libraries that the NDK
+# does not ship (libcutils, libutils, libhardware, libtinyalsa, ...): one '<library> <symbol>'
+# per line, for a HAL whose Android.mk lists that library in LOCAL_SHARED_LIBRARIES.
+# Symbols of libc, libm, libdl and liblog are checked against the NDK's stubs instead.
