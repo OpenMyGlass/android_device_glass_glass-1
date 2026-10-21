@@ -41,12 +41,12 @@ PRODUCT_COPY_FILES += \
 # the kernel it was built with, so both come from the same glass-kernel build. Without them the
 # build stops, unless GLASS_NO_KERNEL=true (system image only, as in CI checks).
 GLASS_KERNEL_DIR ?= vendor/glass/kernel
-ifneq ($(wildcard $(GLASS_KERNEL_DIR)/zImage),)
+ifneq ($(and $(wildcard $(GLASS_KERNEL_DIR)/zImage),$(wildcard $(GLASS_KERNEL_DIR)/pvrsrvkm_sgx540_120.ko)),)
 PRODUCT_COPY_FILES += \
     $(GLASS_KERNEL_DIR)/zImage:kernel \
     $(GLASS_KERNEL_DIR)/pvrsrvkm_sgx540_120.ko:system/lib/modules/pvrsrvkm_sgx540_120.ko
 else ifneq ($(GLASS_NO_KERNEL),true)
-$(error no $(GLASS_KERNEL_DIR)/zImage: run tools/fetch-kernel.sh from OpenMyGlass/manifest, or set GLASS_NO_KERNEL=true for a system-only build)
+$(error no $(GLASS_KERNEL_DIR)/zImage and pvrsrvkm_sgx540_120.ko: run tools/fetch-kernel.sh from OpenMyGlass/manifest, or set GLASS_NO_KERNEL=true for a system-only build)
 endif
 
 PRODUCT_COPY_FILES += \
