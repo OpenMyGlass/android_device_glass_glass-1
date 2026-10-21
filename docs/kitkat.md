@@ -79,8 +79,12 @@ manifest's `docs/kitkat-base.md`.
   and `persist.glass.d2o.usr=space` (user apps). installd passes them as
   `--runtime-arg -compiler-filter:<filter>`. A line `<package> <filter>` in
   `/data/system/glass-dex2oat-filters` overrides them for one package: for example
-  `com.example interpret-only` for an app that dex2oat fails on. The boot image keeps dex2oat's
-  own default for images, `everything`.
+  `com.example interpret-only` for an app that dex2oat fails on; for system APKs the key is the
+  file name (`Settings`), since installd only sees the path. The boot image keeps dex2oat's
+  own default for images, `everything`. 4.4's dex2oat compiles dex files of 900 methods or fewer
+  with `speed` unless the filter is `interpret-only`, so `space` only changes larger apps, and
+  compiles the runtime starts itself (after `/data/dalvik-cache` is wiped, or for a
+  `DexClassLoader`) use the runtime's default filter.
 
 ## 4.4 versus 6.0, for the files shared with the 6.0.1 branch
 
@@ -125,7 +129,7 @@ All not run (no hardware). Use `fastboot boot` only; never flash `bootloader`, `
 - `ls /system/lib/libdvm.so /system/bin/dexopt` finds neither, and `logcat` has no
   JniInvocation `Falling back` line.
 - Developer options show no "Select runtime" entry.
-- Installing an APK logs `dex2oat` with `-compiler-filter:space`; `dumpsys meminfo` works.
+- Installing an APK logs `installd: Running /system/bin/dex2oat ... filter=space`; `dumpsys meminfo` works.
 - Time from `fastboot boot` to `sys.boot_completed=1` on the first boot, and the size of
   `/data/dalvik-cache` (plan Task 3).
 - SurfaceFlinger starts on the PowerVR driver: `logcat | grep -i egl` names
