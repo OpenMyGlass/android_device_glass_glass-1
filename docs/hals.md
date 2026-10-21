@@ -512,6 +512,72 @@ both read `/system/etc/audio_policy.conf` with cutils' config parser (`#` commen
 - `pause_for_audio`: the stock rule (every source but `VOICE_RECOGNITION`) is kept. Whether the
   glasshub (wink and on-head sensor) should pause at all while recording is a product choice.
 
+## Camera (`camera.omap4`, from hardware/ti/omap4)
+
+The camera HAL is TI's, built from source: `camera.omap4` from OMAP4-AOSP
+[android_hardware_ti_omap4](https://github.com/OMAP4-AOSP/android_hardware_ti_omap4) (`camera/`,
+Apache-2.0), branch `stable` at `57eec4a`, the tree `device.mk` inherits through `omap4.mk`.
+`BoardConfig.mk` sets `TI_CAMERAHAL_INTERFACE := OMX` and `device.mk` lists `camera.omap4`; both
+stay as they are. There is no `camera.glass_1`: nothing competes with `camera.omap4`, which
+libhardware finds through `ro.board.platform` (omap4). The OMX path below it (DOMX `libdomx`,
+`libOMX_Core`, `libOMX.TI.DUCATI1.VIDEO.CAMERA`, `libmm_osal`, `libion_ti`, `libtiutils`) is built
+by OMAP4-AOSP's `common.mk` too. The only closed parts on the camera path are the Ducati firmware
+and the gralloc blob, both in `proprietary-files.txt`. Kernel facts below are from
+`glass-omap-xrx13b-stable-3.4.113` at `b6ea856`.
+
+- The sensor is driven by the Ducati (Cortex-M3) firmware, not by Linux. The kernel has no sensor
+  driver; `board-notle.c` only parks the sensor power-down GPIO (gpio 100 on EVT2 and later) and the
+  rpmsg resource manager hands the ISS block to the firmware.
+- Glass needs no camera config file. At the first `get_number_of_cameras`, the HAL opens the OMX
+  camera component and asks the firmware for each sensor's capabilities
+  (`OMX_TI_IndexConfigCamCapabilities`): sizes, formats, frame rates, 3A modes, zoom, facing and
+  mounting angle all come from the firmware. The stock image ships no camera configuration or DCC
+  (tuning) files either.
+- DCC: the HAL and the DOMX proxy look for tuning files in `/data/misc/camera/` (`DCC_PATH` in
+  `domx/omx_core/inc/OMX_TI_IVCommon.h`, the path for every release before N). With none there they
+  log "No DCC files found, switching back to default DCC" and use the firmware's built-in tuning,
+  as stock most likely does. `init.omap4430.rc` creates the directory 0770 media:media
+  (`docs/hardware-facts.md`, Directories), since both run in mediaserver as user media, so the
+  HAL can save DCC data there (`OMXDccDataSave.cpp`). Stock does not create it.
+- Glass's board name is `glass_1`, so none of the board switches in `camera/Android.mk` apply
+  (`MOTOROLA_CAMERA`, `CAMERAHAL_PIRANHA`, `CAMERAHAL_TUNA`/`DOMX_TUNA`).
+- Properties: the HAL reads `ro.product.manufacturer` and `ro.product.model` for EXIF and
+  `debug.camera.*`; the flash properties do not matter (Glass has no flash). `omap4.mk` sets
+  `camera2.portability.force_api=1`, so apps get camera API 1. No Glass property is needed.
+
+### Struct-layout risk
+
+TI's DOMX headers must lay out the camera structures (`OMX_TI_CAPTYPE` and others) the way XE24's
+Ducati firmware build does. OMAP4-AOSP has two layouts: the default one and the older Galaxy Nexus
+one under `DOMX_TUNA` (`OMX_TI_IVCommon.h`: arrays of 100 against 32/64, no
+`tRotatedPreviewResRange`, and others), turned on only for `tuna` in `domx/omx_core/Android.mk`,
+`domx/omx_proxy_component/Android.mk` and `camera/Android.mk`. Which one XE24's firmware uses can
+only be settled on a device. What points to the default layout: the stock image ships
+`libOMX.TI.DUCATI1.VIDEO.H264SVCE.so`, bltsville and `libdsswbhal.so`, which belong to TI's
+omap4-next line that OMAP4-AOSP follows; AOSP `hardware/ti/omap4xxx` at android-4.4.4_r1 has no
+H264SVCE component. A wrong layout shows up as a failed or nonsensical capability query; the
+fallback is a rebuild of DOMX and the HAL with `DOMX_TUNA` (`docs/device-checklist.md`). A second,
+separate risk is the gralloc handle layout (`hwc/hal_public.h`, `IMG_native_handle_t`) against the
+stock gralloc blob, which shows up as broken preview buffers; the GPU work tracks it.
+
+There is no CI build of the camera HAL: it links C++ platform libraries (`libcamera_client`,
+`libgui`, `libui`, `libbinder`) that the NDK does not ship, and the code is third-party and
+unchanged here. If a Glass-specific patch is ever added (a capability fixup such as Piranha's),
+add a compile-only job for the changed files against the pinned headers.
+
+### Camera: what a 4.4 branch needs
+
+- `hardware/ti/omap4` from OMAP4-AOSP branch `aosp-4.4` (`a99c69f`), the same lineage; AOSP
+  `hardware/ti/omap4xxx` is the older Galaxy Nexus tree and has no H264SVCE component.
+- `camera/Android.mk` on `aosp-4.4` ignores `TI_CAMERAHAL_INTERFACE`: it sets
+  `OMAP4_CAMERA_HAL_USES := ALL`, which also builds the V4L (USB webcam) adapter. Glass has no
+  `/dev/video*` node for the built-in camera, so the V4L side should find nothing. Check it on a
+  device, or patch the file to OMX in that tree.
+- `DCC_PATH` is `/data/misc/camera/` there too, so the same `mkdir` works. The module name and
+  `LOCAL_MODULE_PATH` (`$(TARGET_OUT_SHARED_LIBRARIES)/hw`) are the same.
+- `media_codecs.xml` must be the 4.4 form (`docs/media-facts.md`, "4.4 and 6.0").
+- `camera2.portability.force_api` does not exist on 4.4 (no camera2 API); nothing to do.
+
 ## What a 4.4 branch needs
 
 All four HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
@@ -534,6 +600,13 @@ All four HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
   - `audio.a2dp.default` comes from `external/bluetooth/bluedroid` on 4.4 (`system/bt` on 6.0);
     `audio.usb.default` and `audio.r_submix.default` from hardware/libhardware; `tinymix` from
     external/tinyalsa. Same `device.mk` lines.
+- Camera (TI's `camera.omap4`, not one of the four; see "Camera: what a 4.4 branch needs" above):
+  - `hardware/ti/omap4` from OMAP4-AOSP branch `aosp-4.4` (`a99c69f`), whose `camera/Android.mk`
+    builds the OMX and V4L adapters (`OMAP4_CAMERA_HAL_USES := ALL`) whatever
+    `TI_CAMERAHAL_INTERFACE` says.
+  - The same `/data/misc/camera` mkdir (`DCC_PATH` is the same on 4.4).
+  - The 4.4 form of `media_codecs.xml` (`docs/media-facts.md`, "4.4 and 6.0"), without the two
+    `media_codecs_google_*.xml` copies in `device.mk`.
 - SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server (power,
   lights, sensors) and mediaserver (audio: `/dev/snd`, `usb_mux.0`, `pause_for_audio`) to use
   `sysfs` and the device nodes on both trees.

@@ -65,3 +65,13 @@ All not run.
 - 8000 and 16000 Hz capture (VoIP-type apps) works through the voice configs and the resampler. Not run.
 - While recording with a source other than voice recognition, `cat /sys/devices/platform/omap_i2c.4/i2c-4/4-0035/pause_for_audio` reads 1, and 0 after the recording stops. The "ok glass" hotword (voice recognition) leaves it at 0. Not run.
 - Bluetooth A2DP headphones play through `audio.a2dp.default`, and screen casting with `audio.r_submix.default` carries sound. Not run.
+
+## Camera and media (`docs/hals.md`, Camera; `docs/media-facts.md`)
+
+- Ducati firmware version: once the firmware has loaded, `cat /sys/kernel/debug/remoteproc/*/name` and `cat /sys/kernel/debug/remoteproc/*/version` (`drivers/remoteproc/remoteproc_debugfs.c`). Record the version string; it settles which TI firmware line, and so which DOMX layout, XE24 uses. Not run.
+- Capability query: `logcat -s CameraHal` while opening the camera shows "Number of OMX Cameras detected = 1". "OMX capability query success" and `sen mount id=` (the sensor ID) are debug logs; get them, and `_dumpOmxTiCap`, from a build with `TI_CAMERAHAL_DEBUG_ENABLED`. Record the sensor ID and the preview, picture and video sizes the HAL reports. Not run.
+- Preview, a still capture and a 720p recording (the `720p` camcorder profile, 1280x720 at 30 fps, 12 Mbit/s): record the frame size and the result of each, and whether the preview buffers look right (the gralloc handle layout). Not run.
+- Fallback if the capability query fails or returns nonsense: rebuild DOMX and `camera.omap4` with `DOMX_TUNA` (the older struct layout) and repeat the two rows above. Not run.
+- `/data/misc/camera` exists, 0770 media:media, and `logcat` shows either DCC files found or "No DCC files found, switching back to default DCC", with no permission error. Not run.
+- Media codecs: `MediaCodecList` (from a test app, or `logcat` of mediaserver at boot) lists the four TI codecs first and the release's `OMX.google.*` codecs after them; an H.264 720p file plays on `OMX.TI.DUCATI1.VIDEO.DECODER`. Not run.
+- Media profiles kept from stock with odd values: recording with the qcif, cif or 480p profile (AAC at 12.2 kbit/s, 8 kHz, stereo) and an AMR recording (declared two channels) work, or fail in a way that says which value to change. Not run.
