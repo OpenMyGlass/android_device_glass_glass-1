@@ -26,6 +26,22 @@ class AndroidMkTest(unittest.TestCase):
                 # Only NDK libraries so far; a system library needs allowlisted symbols.
                 self.assertLessEqual(set(libs), set(build_hals.NDK_LIBS))
 
+    def test_audio_makefile(self):
+        mk = build_hals.parse_android_mk((ROOT / "audio" / "Android.mk").read_text())
+        self.assertEqual(mk["LOCAL_MODULE"], ["audio.primary.glass_1"])
+        for src in mk["LOCAL_SRC_FILES"]:
+            self.assertTrue((ROOT / "audio" / src).is_file(), src)
+        self.assertIn("-Werror", mk["LOCAL_CFLAGS"])
+        self.assertEqual(mk["LOCAL_SHARED_LIBRARIES"],
+                         ["liblog", "libcutils", "libtinyalsa", "libaudioutils"])
+
+    def test_workflow_builds_these_hals(self):
+        workflow = (ROOT / ".github" / "workflows" / "hals.yml").read_text()
+        line = next(l for l in workflow.splitlines() if l.strip().startswith("HALS:"))
+        built = line.split(":", 1)[1].split()
+        for hal in (*HALS, "audio"):
+            self.assertIn(hal, built)
+
     def test_continuation_and_append(self):
         mk = build_hals.parse_android_mk(
             "LOCAL_PATH := $(call my-dir)\ninclude $(CLEAR_VARS)\n"

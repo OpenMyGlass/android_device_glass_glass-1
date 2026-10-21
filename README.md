@@ -9,7 +9,8 @@ files were removed from the history of this tree. That includes `firmware/`,
 `rootdir/`, `wifi/bcmdhd.cal`, `wifi/wpa_supplicant.conf`, the two
 `thermal_*_config.xml` overlays, `audio_policy.conf`, `system.prop`,
 `board-info.txt` and `egl.cfg`. The new `rootdir/` and `system.prop` files
-were written clean-room from `docs/hardware-facts.md`.
+were written clean-room from `docs/hardware-facts.md`, and the new
+`audio/audio_policy.conf` from `docs/specs/audio.md`.
 
 ## Building
 
