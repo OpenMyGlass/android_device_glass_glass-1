@@ -29,12 +29,22 @@ BOARD_KERNEL_PAGESIZE := 2048
 BOARD_KERNEL_BASE := 0x80000000
 BOARD_KERNEL_CMDLINE := androidboot.hardware=omap4430 vmalloc=500M androidboot.carrier=wifi-only product_type=w androidboot.selinux=permissive
 
-# External SGX Module
+# External SGX module, built from IMG DDK 1.9@2166536 (dual MIT/GPL-2.0): the build of
+# XE24's user-space libraries, which check the module's DDK build. Fetch it with
+# tools/fetch-pvr.sh $(GLASS_PVR_FETCH_DIR); tools/pvr.env pins it as glass-kernel does.
+# The make variables are glass-kernel's scripts/build.sh ones: the same DDK build options as
+# the module glass-kernel compares with the stock XE24 one (its docs/gpu-module.md).
+GLASS_PVR_FETCH_DIR ?= vendor/glass/pvr-km
+GLASS_PVR_KM ?= $(GLASS_PVR_FETCH_DIR)/proprietary/imgtec/eurasia_km
+# Recursive (=): KERNEL_OUT is defined after this file is read.
+GLASS_PVR_BUILD = $(abspath $(KERNEL_OUT)/../pvr-build)
 SGX_MODULES:
-	make clean -C $(HARDWARE_TI_OMAP4_BASE)/pvr-source/eurasiacon/build/linux2/omap4430_android
-	cp $(TARGET_KERNEL_SOURCE)/drivers/video/omap2/omapfb/omapfb.h $(KERNEL_OUT)/drivers/video/omap2/omapfb/omapfb.h
-	make -j8 -C $(HARDWARE_TI_OMAP4_BASE)/pvr-source/eurasiacon/build/linux2/omap4430_android ARCH=arm KERNEL_CROSS_COMPILE=arm-eabi- CROSS_COMPILE=arm-eabi- KERNELDIR=$(KERNEL_OUT) TARGET_PRODUCT="blaze_tablet" BUILD=release TARGET_SGX=540 PLATFORM_VERSION=4.0
-	mv $(KERNEL_OUT)/../../target/kbuild/pvrsrvkm_sgx540_120.ko $(KERNEL_MODULES_OUT)
+	test -n "$(KERNEL_OUT)" && test -n "$(KERNEL_MODULES_OUT)"
+	test -f $(GLASS_PVR_KM)/include4/pvrversion.h || { echo "error: no DDK at $(GLASS_PVR_KM); run device/glass/glass-1/tools/fetch-pvr.sh $(GLASS_PVR_FETCH_DIR)" >&2; exit 1; }
+	rm -rf $(GLASS_PVR_BUILD)
+	cp -R $(GLASS_PVR_KM) $(GLASS_PVR_BUILD)
+	make -j8 -C $(GLASS_PVR_BUILD)/eurasiacon/build/linux2/omap4430_android ARCH=arm KERNEL_CROSS_COMPILE=arm-eabi- CROSS_COMPILE=arm-eabi- KERNELDIR=$(abspath $(KERNEL_OUT)) TARGET_PRODUCT=blaze_tablet BUILD=release TARGET_SGX=540 PLATFORM_VERSION=4.0 OUT=$(GLASS_PVR_BUILD)/binary kbuild
+	cp $(GLASS_PVR_BUILD)/binary/target/pvrsrvkm_sgx540_120.ko $(KERNEL_MODULES_OUT)
 	$(ARM_EABI_TOOLCHAIN)/arm-eabi-strip --strip-unneeded $(KERNEL_MODULES_OUT)/pvrsrvkm_sgx540_120.ko
 
 TARGET_KERNEL_MODULES += SGX_MODULES
