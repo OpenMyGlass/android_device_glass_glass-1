@@ -36,6 +36,19 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/fstab.omap4430:root/fstab.omap4430
 
+# Kernel and SGX module, built by glass-kernel (variant tuned-stable) and copied into
+# GLASS_KERNEL_DIR by OpenMyGlass/manifest's tools/fetch-kernel.sh. The module only loads into
+# the kernel it was built with, so both come from the same glass-kernel build. Without them the
+# build stops, unless GLASS_NO_KERNEL=true (system image only, as in CI checks).
+GLASS_KERNEL_DIR ?= vendor/glass/kernel
+ifneq ($(wildcard $(GLASS_KERNEL_DIR)/zImage),)
+PRODUCT_COPY_FILES += \
+    $(GLASS_KERNEL_DIR)/zImage:kernel \
+    $(GLASS_KERNEL_DIR)/pvrsrvkm_sgx540_120.ko:system/lib/modules/pvrsrvkm_sgx540_120.ko
+else ifneq ($(GLASS_NO_KERNEL),true)
+$(error no $(GLASS_KERNEL_DIR)/zImage: run tools/fetch-kernel.sh from OpenMyGlass/manifest, or set GLASS_NO_KERNEL=true for a system-only build)
+endif
+
 PRODUCT_COPY_FILES += \
     device/glass/glass-1/media_codecs.xml:system/etc/media_codecs.xml \
     device/glass/glass-1/media_profiles.xml:system/etc/media_profiles.xml
