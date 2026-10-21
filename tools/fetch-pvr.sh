@@ -10,6 +10,17 @@ dest=$1
 # shellcheck disable=SC1091
 . "$(dirname "$0")/pvr.env"
 
+# checkout --force and clean -fdx below delete local files: only touch DEST if it is
+# missing, empty, or already a checkout of PVR_REPO.
+if [ -d "$dest/.git" ]; then
+    if [ "$(git -C "$dest" remote get-url origin 2>/dev/null || true)" != "$PVR_REPO" ]; then
+        echo "error: $dest is a git checkout of something else; pick another DEST" >&2
+        exit 1
+    fi
+elif [ -e "$dest" ] && [ -n "$(ls -A "$dest")" ]; then
+    echo "error: $dest exists and is not empty; pick another DEST" >&2
+    exit 1
+fi
 if [ ! -d "$dest/.git" ]; then
     mkdir -p "$dest"
     git init -q "$dest"

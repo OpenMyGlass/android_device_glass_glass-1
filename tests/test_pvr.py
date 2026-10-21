@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KO = "pvrsrvkm_sgx540_120.ko"
-# glass-kernel scripts/source.env and scripts/build.sh.
+# Copied from glass-kernel's scripts/source.env and scripts/build.sh; update both together.
 PINS = {
     "PVR_REPO": "https://github.com/KFire-Android/android_vendor_amazon_otter.git",
     "PVR_COMMIT": "7d7692662a6d906fe074475602ae3085aa4e35cd",
@@ -16,7 +16,7 @@ PINS = {
     "PVR_EXPECTED_BUILD": "2166536",
     "PVR_EXPECTED_BRANCH": "1.9",
 }
-DDK_ARGS = ("KERNELDIR=", "BUILD=release", "TARGET_PRODUCT=blaze_tablet", "TARGET_SGX=540",
+DDK_ARGS = ("ARCH=arm", "KERNELDIR=", "BUILD=release", "TARGET_PRODUCT=blaze_tablet", "TARGET_SGX=540",
             "PLATFORM_VERSION=4.0", "KERNEL_CROSS_COMPILE=", "CROSS_COMPILE=", "kbuild")
 
 
@@ -30,7 +30,7 @@ def pins():
 
 
 class PinsTest(unittest.TestCase):
-    def test_pins_match_glass_kernel(self):
+    def test_pins_are_the_expected_ddk(self):
         self.assertEqual(pins(), PINS)
 
     def test_boardconfig_builds_from_the_pinned_path(self):
@@ -79,9 +79,27 @@ class SgxRuleTest(unittest.TestCase):
         args = (self.tmp / "modules" / KO).read_text().split()
         for want in DDK_ARGS:
             self.assertTrue(any(a.startswith(want) for a in args), (want, args))
-        self.assertIn(f"OUT={self.tmp}/k/obj/../pvr-build/binary", args)
+        self.assertIn(f"OUT={self.tmp}/k/pvr-build/binary", args)
         self.assertTrue((self.tmp / "modules" / (KO + ".stripped")).exists())
         self.assertFalse((self.ddk / "binary").exists(), "the DDK checkout must stay pristine")
+
+    def test_refuses_an_empty_kernel_out(self):
+        r = subprocess.run(
+            ["make", "-s", "-f", str(ROOT / "BoardConfig.mk"), "SGX_MODULES",
+             f"GLASS_PVR_KM={self.ddk}", "KERNEL_OUT=", f"KERNEL_MODULES_OUT={self.tmp}/modules",
+             f"ARM_EABI_TOOLCHAIN={self.tool}"], cwd=self.tmp, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse((self.tmp / "modules" / KO).exists())
+
+    def test_relative_kernel_out_is_made_absolute(self):
+        r = subprocess.run(
+            ["make", "-s", "-f", str(ROOT / "BoardConfig.mk"), "SGX_MODULES",
+             f"GLASS_PVR_KM={self.ddk}", "KERNEL_OUT=k/obj", "KERNEL_MODULES_OUT=modules",
+             f"ARM_EABI_TOOLCHAIN={self.tool}"], cwd=self.tmp, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        args = (self.tmp / "modules" / KO).read_text().split()
+        self.assertIn(f"KERNELDIR={self.tmp.resolve()}/k/obj", args)
+        self.assertIn(f"OUT={self.tmp.resolve()}/k/pvr-build/binary", args)
 
     def test_fails_without_the_ddk(self):
         r = self.make(self.tmp / "missing")
