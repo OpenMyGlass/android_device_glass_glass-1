@@ -36,16 +36,9 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/fstab.omap4430:root/fstab.omap4430
 
-# Audio
-PRODUCT_COPY_FILES += \
-    device/glass/glass-1/audio_policy.conf:system/etc/audio_policy.conf
-
 PRODUCT_COPY_FILES += \
     device/glass/glass-1/media_codecs.xml:system/etc/media_codecs.xml \
     device/glass/glass-1/media_profiles.xml:system/etc/media_profiles.xml
-
-PRODUCT_COPY_FILES += \
-    device/glass/glass-1/wifi/bcmdhd.cal:system/etc/wifi/bcmdhd.cal
 
 # Hardware-specific features
 PRODUCT_COPY_FILES += \

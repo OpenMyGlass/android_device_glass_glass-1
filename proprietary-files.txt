@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Paths relative to /system, extracted from the owner's own image by glass-rom.
+
+# Bluetooth and Wi-Fi firmware
+vendor/firmware/bcm4330.hcd
+vendor/firmware/fw_bcmdhd.bin
+
+# Ducati and DSP firmware
+vendor/firmware/NVM2
+vendor/firmware/ducati-m3-core0-2gb.xem3
+vendor/firmware/ducati-m3-core0.xem3
+vendor/firmware/glasshub.s19
+vendor/firmware/tesla-dsp.xe64T
+
+# GPU
+vendor/bin/pvrsrvctl_SGX540_120
+vendor/bin/pvrsrvinit
+vendor/lib/egl/libEGL_POWERVR_SGX540_120.so
+vendor/lib/egl/libGLESv1_CM_POWERVR_SGX540_120.so
+vendor/lib/egl/libGLESv2_POWERVR_SGX540_120.so
+vendor/lib/libIMGegl_SGX540_120.so
+vendor/lib/libPVRScopeServices_SGX540_120.so
+vendor/lib/libbltsville_gc2d.2.2.2.0.so
+vendor/lib/libbltsville_ticpu.2.1.0.0.so
+vendor/lib/libbltsville_ticpu_license.txt
+vendor/lib/libglslcompiler_SGX540_120.so
+vendor/lib/libpvr2d_SGX540_120.so
+vendor/lib/libpvrANDROID_WSEGL_SGX540_120.so
+vendor/lib/libsrv_init_SGX540_120.so
+vendor/lib/libsrv_um_SGX540_120.so
+vendor/lib/libusc_SGX540_120.so
+
+# HALs
+lib/hw/audio.primary.glass_1.so
+lib/hw/gps.omap4.so
+lib/hw/sensors.glass_1.so
+vendor/lib/hw/gralloc.omap4430.so
+
+# Glass daemons
+bin/bqflash
+bin/raft
+bin/shm_service
+bin/sysproxy
+bin/sysproxyd
+xbin/bootconfig
+xbin/hex2bin
+
+# Configuration
+etc/audio_policy.conf
+etc/wifi/bcmdhd.cal
