@@ -17,8 +17,8 @@ if [ -d "$dest/.git" ]; then
         echo "error: $dest is a git checkout of something else; pick another DEST" >&2
         exit 1
     fi
-elif [ -e "$dest" ] && [ -n "$(ls -A "$dest")" ]; then
-    echo "error: $dest exists and is not empty; pick another DEST" >&2
+elif [ -e "$dest" ] && { [ ! -d "$dest" ] || [ -n "$(ls -A "$dest" 2>/dev/null || echo unreadable)" ]; }; then
+    echo "error: $dest exists and is not an empty directory; pick another DEST" >&2
     exit 1
 fi
 if [ ! -d "$dest/.git" ]; then
