@@ -64,6 +64,12 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     camera.omap4
 
+# Hardware composer, built from hardware/ti/omap4/hwc (docs/hals.md). omap4.mk already adds it;
+# listing it here keeps it if that changes. It installs to /system/vendor/lib/hw, where stock has
+# its blob; proprietary-files.txt must not list that blob (tests/test_hwc.py).
+PRODUCT_PACKAGES += \
+    hwcomposer.omap4
+
 # Open HALs (power/, lights/, sensors/; docs/hals.md). libhardware tries ro.product.board
 # (glass_1) before ro.board.platform (omap4), so these win over any *.omap4 module. power.omap4
 # stays installed but unused: hardware/ti/omap4/omap4.mk, inherited above, adds it.
