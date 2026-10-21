@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Device node permissions for Google Glass Explorer Edition.
+# Written from docs/hardware-facts.md.
+
+# Graphics, display and memory
+/dev/pvrsrvkm             0666  system     system
+/dev/dsscomp              0666  system     system
+/dev/ion                  0666  system     system
+/dev/tiler                0666  system     system
+
+# Remote processors (Ducati video and camera)
+/dev/rpmsg-omx0           0666  drmrpc     drmrpc
+/dev/rpmsg-omx1           0666  drmrpc     drmrpc
+/dev/rproc_user           0666  drmrpc     drmrpc
+
+# Camera
+/dev/video0               0777  system     system
+
+# Motion sensor
+/dev/iio:device0          0664  system     system
+/dev/mpu                  0660  system     system
+/dev/mpuirq               0660  system     system
+/dev/accelirq             0660  system     system
+/dev/compassirq           0660  system     system
+/dev/timerirq             0660  system     system
+
+# Light and proximity sensor
+/dev/si114x               0666  root       root
+
+# Glasshub microcontroller
+/dev/glasshub             0600  system     system
+
+# UARTs: ttyO1 Bluetooth, ttyO3 GPS
+/dev/ttyO1                0600  bluetooth  bluetooth
+/dev/ttyO3                0660  system     system
+
+# bootconfig partition
+/dev/block/mmcblk0p4      0660  root       system
