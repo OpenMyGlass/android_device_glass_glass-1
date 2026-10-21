@@ -29,17 +29,9 @@
       A storage should not have both emulated and removable set to true
 -->
 <StorageList xmlns:android="http://schemas.android.com/apk/res/android">
-    <storage android:mountPoint="/storage/sdcard0"
-             android:storageDescription="@string/storage_internal"
-             android:primary="true"
+    <!-- Glass has no SD card slot and no USB host storage: one emulated volume over /data/media
+         (4.4 ignores the mount point of an emulated primary volume). -->
+    <storage android:storageDescription="@string/storage_internal"
              android:emulated="true"
              android:mtpReserve="100" />
-    <storage android:mountPoint="/storage/sdcard1"
-             android:storageDescription="@string/storage_sd_card"
-             android:primary="false"
-             android:removable="true" />
-    <storage android:mountPoint="/storage/usbcard1"
-             android:storageDescription="@string/storage_usb"
-             android:primary="false"
-             android:removable="true" />
 </StorageList>

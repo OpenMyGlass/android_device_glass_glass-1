@@ -28,6 +28,11 @@ TARGET_BOOTLOADER_BOARD_NAME := glass_1
 BOARD_KERNEL_PAGESIZE := 2048
 BOARD_KERNEL_BASE := 0x80000000
 BOARD_KERNEL_CMDLINE := androidboot.hardware=omap4430 vmalloc=500M androidboot.carrier=wifi-only product_type=w androidboot.selinux=permissive
+# omap4-aosp's build still includes core/tasks/kernel.mk, which defaults TARGET_KERNEL_SOURCE to
+# kernel/<vendor>/<device> and, if that directory exists, adds its own rule for the kernel image.
+# Point it at a path that never exists, so only device.mk's prebuilt rule applies (the task then
+# just prints its "prebuilt kernel" deprecation warning).
+TARGET_KERNEL_SOURCE := device/glass/glass-1/no-inline-kernel
 # GLASS_NO_KERNEL=true: system image only, no boot or recovery image (device.mk).
 ifeq ($(GLASS_NO_KERNEL),true)
 TARGET_NO_KERNEL := true

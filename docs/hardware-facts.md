@@ -427,7 +427,7 @@ its own copy in /system/lib/modules; the tree does not extract it.
 | service glass_tpflash (/system/etc/glass_tpflash.sh) | Glass-only script, not in proprietary-files.txt. |
 | service pvrsrvinit | OMAP4-AOSP `init.omap4.rc`, which `init.omap4430.rc` imports, already defines it for /system/bin/pvrsrvinit, built from OMAP4-AOSP; a second definition would clash. Justin 6.0 tree drops it too. |
 | /data/private-cache (mode 6770) | Owned by a Glass-only user ID that AOSP does not define. |
-| /data/system and /data/media | AOSP init.rc already creates them. |
+| /data/system and /data/media | AOSP init.rc creates /data/system; installd creates /data/media (4.4) or vold does (6.0). |
 | /data/local/tmp mode 0777 | Debugging aid for valgrind; AOSP init.rc sets its own mode. |
 | /dev/ion mode 0777 (stock init, on boot) | Wider than the ueventd mode 0666; the Device nodes table keeps 0666. |
 | /proc/cmdline mode 0444 | XE24 only; Justin 6.0 tree drops it. |
