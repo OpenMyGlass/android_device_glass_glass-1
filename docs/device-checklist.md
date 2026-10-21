@@ -47,3 +47,20 @@ All not run.
 - Power (spec §9.6): with every sensor off, `power_state` reads 0 and the battery current drops compared with a sensor running; `als_enable` reads 0 with the light sensor off. Not run.
 - IIO device number: `/sys/bus/iio/devices/iio:device0/name` is `mpu9150`. If the device has another number, the `iio:device0` paths in `ueventd.omap4430.rc` and `init.omap4430.rc` need it. Not run.
 - Batching requests: an app registering with a max report latency still gets events (SensorManager retries in continuous mode after `batch` returns `-EINVAL`). Not run.
+
+## Audio HAL (`docs/hals.md`, `docs/specs/audio.md` section 8)
+
+All not run.
+
+- On both the 4.4 and the 6.0 build, `audio.primary.glass_1` loads: `logcat -s audio.primary.glass_1` shows "opened: card 0, playback device 0, capture device 2" and no "missing mixer control" line. Not run.
+- `tinymix` on card 0 shows the values of spec 4.2 after boot, among them `Earphone Playback Volume` 15, `Headset Playback Volume` 12, and the handsfree controls untouched. Not run.
+- With nothing plugged in, a notification sound plays on the bone conduction transducer (the TWL6040 EP output), at a level no louder than stock XE24 (spec 8, question 1; `Earphone Playback Volume` 15 is the stock value and the maximum). Not run.
+- Playback through plain tinyalsa (`pcm_write`, no mmap) on device 0 works with the ABE firmware as this kernel loads it, without underruns in logcat (spec 8, question 3). Not run.
+- Media playback sounds acceptable on the transducer without the stock BCT equalisation; note whether an open EQ is needed (spec 8, question 4). Not run.
+- With a stereo earbud on the USB port, `cat /sys/devices/platform/usb_mux.0/headset` reads `Stereo`, playback is stereo on the earbud and silent on the transducer; with a mono earbud it reads `Mono` and plays a mono down-mix. Not run.
+- Plugging and unplugging an earbud during playback moves the sound within about a second (`id_monitor` polling, `h2w` switch, routing change). Not run.
+- With the USB cable connected, starting playback with an earbud detected leaves the USB connection working (`mux_mode` stays `usb`; spec 8, question 5). Not run.
+- Recording (Camera video, a recorder app at 44100 and 48000 Hz, mono and stereo) captures both DMIC0 microphones at a sensible level with no click at the start; check which channel is which and whether it is front/back (spec 8, question 2). Not run.
+- 8000 and 16000 Hz capture (VoIP-type apps) works through the voice configs and the resampler. Not run.
+- While recording with a source other than voice recognition, `cat /sys/devices/platform/omap_i2c.4/i2c-4/4-0035/pause_for_audio` reads 1, and 0 after the recording stops. The "ok glass" hotword (voice recognition) leaves it at 0. Not run.
+- Bluetooth A2DP headphones play through `audio.a2dp.default`, and screen casting with `audio.r_submix.default` carries sound. Not run.

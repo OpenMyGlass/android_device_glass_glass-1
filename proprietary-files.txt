@@ -31,7 +31,6 @@ vendor/lib/libsrv_um_SGX540_120.so
 vendor/lib/libusc_SGX540_120.so
 
 # HALs
-lib/hw/audio.primary.glass_1.so
 vendor/lib/hw/gralloc.omap4430.so
 
 # Glass daemons
@@ -44,5 +43,4 @@ xbin/bootconfig
 xbin/hex2bin
 
 # Configuration
-etc/audio_policy.conf
 etc/wifi/bcmdhd.cal
