@@ -10,7 +10,10 @@ files were removed from the history of this tree. That includes `firmware/`,
 `thermal_*_config.xml` overlays, `audio_policy.conf`, `system.prop`,
 `board-info.txt` and `egl.cfg`. The new `rootdir/` and `system.prop` files
 were written clean-room from `docs/hardware-facts.md`, and the new
-`audio/audio_policy.conf` from `docs/specs/audio.md`.
+`audio/audio_policy.conf` from `docs/specs/audio.md`. `media_codecs.xml` and
+`media_profiles.xml` were byte-identical to the XE24 files; they were replaced by
+files written from AOSP's `device/samsung/tuna` ones and the facts in
+`docs/media-facts.md`. The old copies are still in this tree's history.
 
 ## Building
 
