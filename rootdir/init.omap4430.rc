@@ -9,9 +9,19 @@ import /init.omap4.rc
 import /init.omap4430.usb.rc
 
 on init
+    # Emulated external storage, Android 4.4 layout: /data/media is served by the sdcard
+    # FUSE daemon (service sdcard) at /mnt/shell/emulated and seen at /storage/emulated.
+    mkdir /mnt/shell/emulated 0700 shell shell
+    mkdir /storage/emulated 0555 root root
+    export EXTERNAL_STORAGE /storage/emulated/legacy
+    export EMULATED_STORAGE_SOURCE /mnt/shell/emulated
+    export EMULATED_STORAGE_TARGET /storage/emulated
+
     # Old external storage paths
-    symlink /sdcard /mnt/sdcard
-    symlink /sdcard /storage/sdcard0
+    symlink /storage/emulated/legacy /sdcard
+    symlink /storage/emulated/legacy /mnt/sdcard
+    symlink /storage/emulated/legacy /storage/sdcard0
+    symlink /mnt/shell/emulated/0 /storage/emulated/legacy
 
     # Motion sensor (IIO device and trigger)
     chown system system /sys/bus/iio/devices/iio:device0/accl_bias
@@ -395,6 +405,11 @@ service shm_service /system/bin/shm_service --no-fork
     class core
     user system
     group system
+
+# Virtual sdcard over /data/media, running as media_rw (1023); -l derives permissions from
+# the legacy internal layout (4.4's system/core/sdcard/sdcard.c).
+service sdcard /system/bin/sdcard -u 1023 -g 1023 -l /data/media /mnt/shell/emulated
+    class late_start
 
 # ---------------------------------------------------------------------------
 # Charge-only mode

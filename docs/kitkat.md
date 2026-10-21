@@ -84,17 +84,20 @@ manifest's `docs/kitkat-base.md`.
   looks in `/vendor/lib/egl`, then `/system/lib/egl`, for `libEGL_*.so` and skips
   `libGLES_android.so`. So `vendor/lib/egl/libEGL_POWERVR_SGX540_120.so` is found without a
   config file, as on 6.0.
-- **Storage.** 4.4 needs the emulated sdcard set up by init (the `sdcard` service and the
-  `EXTERNAL_STORAGE` and `EMULATED_STORAGE_*` variables), which 6.0's vold does itself. This is
-  not in this branch yet; see "Open items".
+- **Storage.** 4.4 needs the emulated sdcard set up by init, which 6.0's vold does itself.
+  `rootdir/init.omap4430.rc` sets it up as XE24 did: `/mnt/shell/emulated`, `/storage/emulated`,
+  the `EXTERNAL_STORAGE` and `EMULATED_STORAGE_*` variables, the legacy symlinks, and
+  `service sdcard`. The service uses 4.4's option syntax
+  (`-u 1023 -g 1023 -l /data/media /mnt/shell/emulated`, as AOSP's hammerhead), not XE24's
+  older positional form. AOSP's 4.4 `init.rc` creates `/data/media`. `docs/hardware-facts.md`
+  lists these rows for this branch.
 - **HALs.** `power/` and `lights/` already build for API 19 (`docs/hals.md`; CI job `hals`, 4.4.4
   target).
 
 ## Open items
 
 Each is its own pull request into this branch:
-1. The 4.4 emulated sdcard in `rootdir/init.omap4430.rc` and `docs/hardware-facts.md`.
-2. The lean items of the plan's Task 4 that are one property or one makefile line.
+1. The lean items of the plan's Task 4 that are one property or one makefile line.
 
 ## Device checks
 
@@ -114,5 +117,8 @@ All not run (no hardware). Use `fastboot boot` only; never flash `bootloader`, `
 - Installing an APK logs `dex2oat` with `-compiler-filter:space`; `dumpsys meminfo` works.
 - Time from `fastboot boot` to `sys.boot_completed=1` on the first boot, and the size of
   `/data/dalvik-cache` (plan Task 3).
+- Storage: `getprop | grep -i storage` and `echo $EXTERNAL_STORAGE` (adb shell) show
+  `/storage/emulated/legacy`; `ps | grep sdcard` shows the daemon; a file written to `/sdcard`
+  appears in `/data/media/0`; an app with `WRITE_EXTERNAL_STORAGE` can write there.
 - SurfaceFlinger starts on the PowerVR driver: `logcat | grep -i egl` names
   `/vendor/lib/egl/libEGL_POWERVR_SGX540_120.so`.
