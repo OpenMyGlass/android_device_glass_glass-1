@@ -533,14 +533,18 @@ and the gralloc blob, both in `proprietary-files.txt`. Kernel facts below are fr
   (`OMX_TI_IndexConfigCamCapabilities`): sizes, formats, frame rates, 3A modes, zoom, facing and
   mounting angle all come from the firmware. The stock image ships no camera configuration or DCC
   (tuning) files either.
-- DCC: the HAL and the DOMX proxy look for tuning files in `/data/misc/camera/` (`DCC_PATH` in
-  `domx/omx_core/inc/OMX_TI_IVCommon.h`, the path for every release before N). With none there they
-  log "No DCC files found, switching back to default DCC" and use the firmware's built-in tuning,
-  as stock most likely does. `init.omap4430.rc` creates the directory 0770 media:media
-  (`docs/hardware-facts.md`, Directories), since both run in mediaserver as user media, so the
-  HAL can save DCC data there (`OMXDccDataSave.cpp`). Stock does not create it.
-- Glass's board name is `glass_1`, so none of the board switches in `camera/Android.mk` apply
-  (`MOTOROLA_CAMERA`, `CAMERAHAL_PIRANHA`, `CAMERAHAL_TUNA`/`DOMX_TUNA`).
+- DCC: the HAL's `DCCHandler` (`camera/OMXCameraAdapter/OMXDCC.cpp`) loads tuning files from
+  `/data/misc/camera/` (`DCC_PATH` in `domx/omx_core/inc/OMX_TI_IVCommon.h`, the path for every
+  release before N). The DOMX proxy's own DCC code (`omx_proxy_camera.c`) is built only with
+  `TI_CAMERAHAL_USES_LEGACY_DOMX_DCC`, which this tree does not set. With no files the HAL logs
+  "No DCC files found, switching back to default DCC" (`CAMHAL_LOGE`, so `E/CameraHal` in logcat by
+  default) and uses the firmware's built-in tuning, as stock most likely does.
+  `init.omap4430.rc` creates the directory 0770 media:media (`docs/hardware-facts.md`,
+  Directories), since the HAL runs in mediaserver as user media, so it can also save DCC data
+  there (`OMXDccDataSave.cpp`). Stock does not create it.
+- None of the board switches in `camera/Android.mk` apply: `CAMERAHAL_PIRANHA` and
+  `CAMERAHAL_TUNA`/`DOMX_TUNA` key on `TARGET_BOOTLOADER_BOARD_NAME` (Glass's is `glass_1`), and
+  `MOTOROLA_CAMERA` keys on `BOARD_VENDOR` being `motorola-omap4`, which this tree does not set.
 - Properties: the HAL reads `ro.product.manufacturer` and `ro.product.model` for EXIF and
   `debug.camera.*`; the flash properties do not matter (Glass has no flash). `omap4.mk` sets
   `camera2.portability.force_api=1`, so apps get camera API 1. No Glass property is needed.
@@ -578,6 +582,129 @@ add a compile-only job for the changed files against the pinned headers.
 - `media_codecs.xml` must be the 4.4 form (`docs/media-facts.md`, "4.4 and 6.0").
 - `camera2.portability.force_api` does not exist on 4.4 (no camera2 API); nothing to do.
 
+## Hardware composer (`hwcomposer.omap4`, from hardware/ti/omap4)
+
+The hardware composer is TI's, built from source: `hwcomposer.omap4` from OMAP4-AOSP
+[android_hardware_ti_omap4](https://github.com/OMAP4-AOSP/android_hardware_ti_omap4) `hwc/`
+(Apache-2.0), branch `stable` at `57eec4a`. `omap4.mk`, which `device.mk` inherits, adds it to
+`PRODUCT_PACKAGES`, and `device.mk` lists it as well. It installs to
+`/system/vendor/lib/hw/hwcomposer.omap4.so`, the path of the stock XE24 blob. Nothing installs the
+blob: `proprietary-files.txt` lists neither it nor `libdsswbhal.so`, and glass-rom's
+`tools/extract_vendor.py` copies only listed files. `tests/test_hwc.py` keeps it that way. It is
+named `omap4` like the stock one; libhardware finds it through `ro.board.platform`, and there is
+no `hwcomposer.glass_1`.
+
+It is the same HAL as stock as far as the stock facts go: it identifies as "OMAP 44xx Hardware
+Composer HAL", drives the display through `/dev/dsscomp`, has the regionizer blit path (blit
+policy and mode), handles HDMI, and reads `debug.hwc.idle`, `debug.hwc.nv12_only`,
+`debug.hwc.rgb_order` and `debug.hwc.showfps`. Kernel facts below are from kernel-omap
+`glass-omap-xrx13b-stable-3.4.113` at `b6ea856`.
+
+### Kernel ABI
+
+The HAL builds against OMAP4-AOSP's sanitized copies in `kernel-headers/` (`video/dsscomp.h`,
+`video/omap_hwc.h`, `linux/bltsville.h` with `bv*.h` and `ocd.h`, `linux/omapfb.h`,
+`linux/omap_ion.h`). Compared with the Glass kernel's `include/video/` and `include/linux/`:
+
+- Text, without comments and line breaks: `omap_hwc.h`, `bltsville.h`, every `bv*.h`, `ocd.h` and
+  the user part of `omapfb.h` (with `OMAPFB_ENABLEVSYNC`) are the same. `dsscomp.h` differs in
+  three ways that matter: the kernel's `struct dss2_ovl_cfg` has two more `__u8` fields at the end
+  (`force_1d`, `mflag_en`), the kernel adds `DSSCIOC_WB_DONE` (136), which the HAL does not use, and
+  `struct dsscomp_videomode` sits outside the `__KERNEL__` block. The rest is spelling and
+  wrapping: the kernel writes `__aligned(4)` where the copy has `__attribute__ ((aligned(4)))`, and
+  wraps the exported enums and structs in `#ifdef __KERNEL__` (where it includes
+  `video/omapdss.h` instead) `#else`. Inside the kernel, `omapdss.h` gives `enum s3d_disp_type`
+  other values (`S3D_DISP_FRAME_PACKING = 0` and so on, against `S3D_DISP_NONE = 0` on the user
+  side), which matters only for HDMI/S3D and is inert on Glass, and `enum omap_dss_display_state`
+  has no `OMAP_DSS_DISPLAY_TRANSITION`, which exists only on the user side.
+- Layout, from a probe compiled for armv7a-linux-androideabi19 against each copy: every struct size,
+  the offsets the HAL relies on and every ioctl number the HAL uses are identical. The two extra
+  fields fall into the padding of `dss2_ovl_cfg` (96 bytes in both, `__aligned(4)`), and the HAL
+  clears the whole composition with `memset` before filling it, so the kernel reads 0 for both.
+
+| Item | Both copies |
+|---|---|
+| sizeof `dss2_ovl_cfg` / `dss2_ovl_info` / `dss2_mgr_info` | 96 / 108 / 40 |
+| sizeof `dsscomp_setup_dispc_data` / `omap_hwc_data` | 676 / 680 |
+| sizeof `dsscomp_display_info` / `dsscomp_platform_info` | 108 / 28 |
+| sizeof `bvbltparams` / `bvsurfgeom` / `bvbuffdesc` | 196 / 32 / 24 |
+| `DSSCIOC_SETUP_DISPC` / `QUERY_DISPLAY` / `SETUP_DISPLAY` / `QUERY_PLATFORM` | 0x42A44F85 / 0xC06C4F83 / 0x403C4F86 / 0x801C4F87 |
+| `DSSCIOC_SETUP_MGR` / `CHECK_OVL` / `WB_COPY` / `WAIT` | 0x40444F80 / 0xC0984F81 / 0x40D84F82 / 0x40084F84 |
+
+- `linux/omap_ion.h` with `USE_TI_LIBION` (the default, `BOARD_USE_TI_LIBION ?= true`): heap ids
+  0-4 (system, TILER, secure input, non-secure TILER, TILER reservation) and the TILER heap type are
+  the same. Id 5 differs (`SECURE_OUTPUT_WFDHDCP` in the HAL copy, `MULTIMEDIA` in the kernel); the
+  HWC only allocates from the TILER heap, for HDMI back buffers.
+- Frames go out through the gralloc framebuffer device's `Post2` with an `omap_hwc_data` (the
+  dsscomp setup plus blit entries). On Glass that lands in the kernel's own
+  `drivers/video/omap2/omaplfb` (`CONFIG_OMAPLFB=y`), whose `ProcessFlipV2` takes exactly that
+  struct and size. (The DDK's `dc_omapfb3_linux` accepts only a bare `dsscomp_setup_dispc_data`; it
+  is not the display driver on Glass.) The dsscomp manager index is the display index, so display 0,
+  the panel on manager 2, needs nothing special. The kernel checks that the size is
+  `sizeof(struct omap_hwc_data)` plus one `rgz_blt_entry` (340 bytes in both copies) per blit,
+  which is what the HAL sends.
+
+### Blits, HDMI and writeback
+
+- Blits: the regionizer hands blit entries to the kernel, where omaplfb runs them on the GC320
+  through GCBV (`CONFIG_GCCORE=y`, `CONFIG_GCIOCTL=y`, `CONFIG_GCBV=y`). The HAL itself loads no
+  user-space bltsville library. It turns blits on only if it can open `/dev/gcioctl`, and neither
+  this tree's nor the stock ueventd files give that node an owner, so it stays root 0600 and
+  SurfaceFlinger logs "Unable to open gc-core device ..., blits disabled", as stock most likely
+  does. Enabling blits would take a ueventd row for `/dev/gcioctl`; that is an owner decision and
+  untested.
+- HDMI: Glass has no HDMI connector. `notle_defconfig` has `# CONFIG_OMAP4_DSS_HDMI is not set` and
+  `board-notle.c` registers one display, the DPI panel. The HDMI code stays compiled in: it only
+  runs on an `hdmi` switch uevent that never comes, and removing it means patching third-party
+  code. One thing it does need: the HAL opens `/dev/graphics/fb1` at start and fails without it.
+  The kernel registers `CONFIG_FB_OMAP2_NUM_FBS=3` framebuffers, so fb1 exists (checklist).
+- Writeback: the stock HWC links `libdsswbhal.so`, TI's DSS writeback service (used on other OMAP4
+  devices for Wi-Fi Display and screen capture through the DSS). OMAP4-AOSP's HWC has no writeback
+  support, and this tree builds no `libdsswbhal`. Anything on Glass that used DSS writeback would
+  lose it; screenshots through SurfaceFlinger are not affected. Whether a Glass feature (for
+  example screencast to the phone) needs it is not known.
+
+### Properties
+
+All optional; the tree sets none of them.
+
+| Property | Default | Effect |
+|---|---|---|
+| debug.hwc.idle | 250 | Idle timeout in ms. When no frame arrives for that long and more than one overlay is in use, the HAL asks SurfaceFlinger to redraw and composes the next two frames with the GPU, so the overlays are released. 0 turns it off. Read at start. |
+| debug.hwc.nv12_only | 0 | 1 puts only NV12 (video) layers on overlays. Read at start. |
+| debug.hwc.rgb_order | 1 | 1 keeps RGB and BGR layers from being mixed on overlays. Read at start. |
+| debug.hwc.showfps | 0 | 1 logs the frame rate every 8 frames. Read each frame. |
+| persist.hwc.bltmode, persist.hwc.bltpolicy | 1, 1 | Blit mode (0 paint, 1 region) and policy (0 off, 1 default, 2 all); read only when `/dev/gcioctl` opens. |
+| persist.hwc.sw_vsync, persist.hwc.sw_vsync_rate | 0, 60 | Software vsync instead of the omapfb vsync uevent. Glass uses hardware vsync (`OMAPFB_ENABLEVSYNC`; only boards `blaze` and `panda5` default to software). |
+| persist.hwc.mirroring.*, persist.hwc.docking.*, persist.hwc.dock_image, persist.hwc.avoid_mode_change | | HDMI only. |
+| persist.hwc.upscaled_nv12_limit | 2. | Upscaling limit for NV12 overlays. |
+
+### Risks and CI
+
+- The HAL casts buffers to `IMG_native_handle_t` and the framebuffer device to
+  `IMG_framebuffer_device_public_t` (`hwc/hal_public.h`) and calls `Post2`, so the stock gralloc
+  blob (DDK `1.9@2166536`) must match that header. Its struct part is the same in OMAP4-AOSP and AOSP
+  `hardware/ti/omap4xxx` at android-4.4.4_r1 (only extra format defines differ), and OMAP4-AOSP's
+  `pvr-source` is DDK `1.9@2291151`, the same branch. A mismatch would show up as a SurfaceFlinger
+  crash or a blank screen at boot. It is the same question the GPU work tracks.
+- No CI build. The HAL is C, so a compile-only job with the NDK is possible in principle, but it
+  needs headers from OMAP4-AOSP (`kernel-headers`, `include`, `edid`), `frameworks/native` (EGL),
+  `hardware/libhardware_legacy` and `external/libpng`, and it would only compile third-party code
+  this tree does not change; it cannot link (`libhardware_legacy`, `libedid`, `libion_ti`). What
+  would catch a real problem is the layout probe above, run against pinned copies of the two
+  header sets; it is not in CI.
+
+### Hardware composer: what a 4.4 branch needs
+
+- `hardware/ti/omap4` from OMAP4-AOSP branch `aosp-4.4` (`a99c69f`): its `omap4.mk` adds
+  `hwcomposer.omap4` too, its `hwc/hal_public.h` and `kernel-headers/` (`dsscomp.h`, `omap_hwc.h`,
+  `bltsville.h`) are the same files as on `stable`, and it reads the same properties and opens the
+  same nodes. Its `hwc/Android.mk` always links `libion_ti` and builds without `-Werror`.
+- Not AOSP `hardware/ti/omap4xxx` at android-4.4.4_r1: its HWC (Galaxy Nexus) has no blit path,
+  unlike stock.
+- Nothing else: 4.4's SurfaceFlinger takes the HAL's `HWC_DEVICE_API_VERSION_1_0`, and the module
+  path (`$(TARGET_OUT_SHARED_LIBRARIES)/../vendor/lib/hw`) works on both.
+
 ## What a 4.4 branch needs
 
 All four HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
@@ -607,6 +734,13 @@ All four HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
   - The same `/data/misc/camera` mkdir (`DCC_PATH` is the same on 4.4).
   - The 4.4 form of `media_codecs.xml` (`docs/media-facts.md`, "4.4 and 6.0"), without the two
     `media_codecs_google_*.xml` copies in `device.mk`.
+- Hardware composer (TI's `hwcomposer.omap4`; see "Hardware composer: what a 4.4 branch needs"
+  above):
+  - `hardware/ti/omap4` from OMAP4-AOSP branch `aosp-4.4` (`a99c69f`), whose `omap4.mk` adds
+    `hwcomposer.omap4` and whose `hwc/hal_public.h` and `kernel-headers/` match `stable`.
+  - Not AOSP `hardware/ti/omap4xxx`: its HWC has no blit path.
+  - The same `device.mk` line; nothing in `proprietary-files.txt`.
 - SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server (power,
-  lights, sensors) and mediaserver (audio: `/dev/snd`, `usb_mux.0`, `pause_for_audio`) to use
-  `sysfs` and the device nodes on both trees.
+  lights, sensors) and mediaserver (audio: `/dev/snd`, `usb_mux.0`, `pause_for_audio`; camera: the
+  DCC directory `/data/misc/camera`) to use `sysfs`, the device nodes and that directory on both
+  trees.

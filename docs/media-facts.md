@@ -40,8 +40,9 @@ AOSP they are listed but never picked. They stay because the stock list has them
 ## Software codec lists (6.0)
 
 On 6.0 the software (`OMX.google.*`) codecs come from the release's own lists, which `device.mk`
-copies from `frameworks/av/media/libstagefright/data/` to `/system/etc/`. The hardware codecs come
-first in each section, so they are preferred.
+copies from `frameworks/av/media/libstagefright/data/` to `/system/etc/`. The TI video codecs come
+before the software video codecs (the audio list, which has no TI codec, comes first), so they are
+preferred.
 
 | Include | Position | Source |
 |---|---|---|
