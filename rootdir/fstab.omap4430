@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Google Glass Explorer Edition. Written from docs/hardware-facts.md.
+#
+# <src>                                                  <mnt_point>  <type>  <mnt_flags>  <fs_mgr_flags>
+
+# Filesystems
+/dev/block/platform/omap/omap_hsmmc.1/by-name/system      /system      ext4  ro  wait
+/dev/block/platform/omap/omap_hsmmc.1/by-name/cache       /cache       ext4  noatime,nosuid,nodev,nomblk_io_submit,errors=panic  wait,check
+/dev/block/platform/omap/omap_hsmmc.1/by-name/userdata    /data        ext4  noatime,nosuid,nodev,nomblk_io_submit,errors=panic  wait,check
+
+# Raw partitions (used by recovery and update tools)
+/dev/block/platform/omap/omap_hsmmc.1/by-name/boot        /boot        emmc  defaults  defaults
+/dev/block/platform/omap/omap_hsmmc.1/by-name/recovery    /recovery    emmc  defaults  defaults
+/dev/block/platform/omap/omap_hsmmc.1/by-name/misc        /misc        emmc  defaults  defaults
+/dev/block/platform/omap/omap_hsmmc.1/by-name/xloader     /xloader     emmc  defaults  defaults
+/dev/block/platform/omap/omap_hsmmc.1/by-name/fpga        /fpga        emmc  defaults  defaults
+/dev/block/platform/omap/omap_hsmmc.1/by-name/efs         /bootloader  emmc  defaults  defaults
+/dev/block/platform/omap/omap_hsmmc.1/by-name/efs         /bootconfig  emmc  defaults  defaults
+
+# Compressed swap in RAM (128 MiB)
+/dev/block/zram0  none  swap  defaults  zramsize=134217728
