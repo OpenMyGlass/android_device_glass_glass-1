@@ -107,7 +107,10 @@ manifest's `docs/kitkat-base.md`.
   the `EXTERNAL_STORAGE` and `EMULATED_STORAGE_*` variables, the legacy symlinks, and
   `service sdcard`. The service uses 4.4's option syntax
   (`-u 1023 -g 1023 -l /data/media /mnt/shell/emulated`, as AOSP's hammerhead), not XE24's
-  older positional form. AOSP's 4.4 `init.rc` creates `/data/media`. `docs/hardware-facts.md`
+  older positional form. installd creates `/data/media` and its per-user directories (4.4's
+  init.rc does not). `storage_list.xml` lists only the emulated volume: Glass has no SD card or
+  USB host storage. AOSP hammerhead also sets `ro.crypto.fuse_sdcard`, which only matters for
+  encryption; Glass's fstab has no `encryptable` entry, so it is left out. `docs/hardware-facts.md`
   lists these rows for this branch.
 - **HALs.** `power/` and `lights/` already build for API 19 (`docs/hals.md`; CI job `hals`, 4.4.4
   target).
