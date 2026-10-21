@@ -32,6 +32,9 @@ def code(rel):
 class KitKatTreeTest(unittest.TestCase):
     def test_no_inline_kernel_or_sgx_build(self):
         text = "\n".join(code("BoardConfig.mk"))
+        self.assertIn("TARGET_KERNEL_SOURCE := device/glass/glass-1/no-inline-kernel", code("BoardConfig.mk"))
+        self.assertFalse((ROOT / "no-inline-kernel").exists())
+        text = text.replace("TARGET_KERNEL_SOURCE := device/glass/glass-1/no-inline-kernel", "")
         for gone in ("TARGET_KERNEL_SOURCE", "TARGET_KERNEL_CONFIG", "SGX_MODULES",
                      "TARGET_KERNEL_MODULES", "GLASS_PVR", "WITH_DEXPREOPT_PIC"):
             self.assertNotIn(gone, text)
@@ -91,9 +94,16 @@ class KernelSelectionTest(unittest.TestCase):
     def test_copies_kernel_and_module_when_present(self):
         (self.tmp / "k").mkdir()
         (self.tmp / "k" / "zImage").write_text("")
+        (self.tmp / "k" / KO).write_text("")
         r = self.make("GLASS_KERNEL_DIR=k")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn(f"COPY=k/zImage:kernel k/{KO}:system/lib/modules/{KO}", r.stdout)
+
+    def test_stops_with_a_kernel_but_no_module(self):
+        (self.tmp / "k").mkdir()
+        (self.tmp / "k" / "zImage").write_text("")
+        r = self.make("GLASS_KERNEL_DIR=k")
+        self.assertNotEqual(r.returncode, 0)
 
     def test_stops_without_a_kernel(self):
         r = self.make("GLASS_KERNEL_DIR=missing")

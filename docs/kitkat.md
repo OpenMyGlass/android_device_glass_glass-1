@@ -25,6 +25,20 @@ manifest's `docs/kitkat-base.md`.
   `GLASS_NO_KERNEL=true`, which also sets `TARGET_NO_KERNEL`: the build then makes a system image
   only, with no boot or recovery image. `tools/fetch-pvr.sh`, `tools/pvr.env` and
   `tests/test_pvr.py` are gone from this branch for the same reason.
+
+  omap4-aosp's build fork still runs `core/tasks/kernel.mk`, which builds a kernel from
+  `TARGET_KERNEL_SOURCE` (default `kernel/glass/glass-1`) when that directory exists.
+  `BoardConfig.mk` points it at a path that never exists, so the task only prints its "prebuilt
+  kernel" deprecation warnings.
+
+  `tuned-stable` is 3.4.113 plus glass-kernel's tuning (interactive governor values, touchpad
+  input boost). OPPs, voltages and thermal limits are unchanged (glass-kernel
+  `docs/tuning.md`), but it has not run on hardware either. For the first boot test, building
+  with `GLASS_KERNEL_VARIANT=stock` in the manifest's `tools/kernel.env` separates kernel problems
+  from Android ones. That is a decision for whoever runs the first boot.
+- **pvrsrvinit link order.** `Android.mk` makes the link of hardware/ti/omap4's `pvrsrvinit`
+  wait for the two PowerVR libraries it links from `/system/vendor/lib`. Only its phony target
+  depended on them, so a parallel build could link first.
 - **bltsville.** With `TI_OMAP_USE_BLTSVILLE := true`, omap4-aosp's `hardware/ti/omap4`
   installs these into `/system/vendor/lib`:
   - `libbltsville_ticpu.2.1.0.0.so` and its licence file, shipped as a TI binary in that
