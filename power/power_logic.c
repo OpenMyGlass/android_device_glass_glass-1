@@ -192,6 +192,8 @@ int glass_power_boost(struct glass_power *p)
 {
     int err = 0;
 
+    if (!p->boost_enabled)
+        return 0;
     pthread_mutex_lock(&p->lock);
     if (p->boostpulse_fd < 0) {
         char full[256];

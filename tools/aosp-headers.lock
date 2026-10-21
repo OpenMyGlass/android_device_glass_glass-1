@@ -3,10 +3,10 @@
 # One line per project and tag: <tag> <project> <commit the tag points to>.
 # The commit is the peeled tag (git ls-remote ... refs/tags/<tag>^{}); a fetch that resolves
 # to anything else fails. Later HALs add projects here.
-android-5.1.1_r37 platform/external/tinyalsa 892d6a54971fa244570b504c2cf4f818f668a8d6
-android-5.1.1_r37 platform/hardware/libhardware 64a2b7534486c509d0e13b91b12d52b42166080e
-android-5.1.1_r37 platform/system/core 81df1cc77722000f8d0025c1ab00ced123aa573c
-android-5.1.1_r37 platform/system/media 2d6976f08018613a6206ba74da3142ca4b85bd2d
+android-4.4.4_r2 platform/external/tinyalsa c98da79067d89d934c4eb7de6a03e412eb421a5c
+android-4.4.4_r2 platform/hardware/libhardware 56910cf52332219c6a23bc12596b261c127d93bf
+android-4.4.4_r2 platform/system/core efbf36f2dad8f083de6f48dbb682461d7cfa9781
+android-4.4.4_r2 platform/system/media 30bf0cc133ecab46b7999ac791ebe95d0c51d746
 android-6.0.1_r31 platform/external/tinyalsa a18addafadff1e2d72c319e07d687ed2cbc2fccb
 android-6.0.1_r31 platform/hardware/libhardware 66776e17bfacbe15e36a8e63712b90d7860e15fd
 android-6.0.1_r31 platform/system/core eac695cb518f60e864f04600a7bd51c1756fa826
