@@ -23,7 +23,14 @@ The `tools/` paths below are relative to a glass-rom checkout:
     tools/extract_vendor.py factory/system.raw $AOSP/device/glass/glass-1/proprietary-files.txt $AOSP/vendor/glass/glass-1
 
 This writes `vendor/glass/glass-1/proprietary/` and `device-vendor.mk`, which
-`device.mk` inherits. Then, from the AOSP root:
+`device.mk` inherits. The GPU kernel module is built from source, from IMG DDK
+`1.9@2166536` (dual MIT/GPL-2.0), the build of XE24's user-space libraries. Fetch
+it (pinned in `tools/pvr.env`, as in glass-kernel) with this tree's script. From the
+AOSP root:
+
+    device/glass/glass-1/tools/fetch-pvr.sh vendor/glass/pvr-km
+
+Then, still from the AOSP root:
 
     source build/envsetup.sh
     lunch aosp_glass_1-userdebug
