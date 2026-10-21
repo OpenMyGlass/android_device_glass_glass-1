@@ -35,6 +35,10 @@ INCLUDE_DIRS = (
     "external/tinyalsa/include",
 )
 CFLAGS = ["-std=gnu99", "-O2", "-fPIC", "-Wall", "-Werror", "-fno-common"]
+# What the AOSP build itself defines for these headers. 5.1 force-includes
+# build/core/combo/include/arch/linux-arm/AndroidConfig.h, which sets HAVE_SYS_UIO_H (line 101);
+# without it, 5.1's log/uio.h redefines struct iovec. 6.0 no longer reads it.
+PLATFORM_DEFINES = ["-DHAVE_SYS_UIO_H=1"]
 VARS = ("LOCAL_MODULE", "LOCAL_SRC_FILES", "LOCAL_CFLAGS", "LOCAL_SHARED_LIBRARIES")
 ASSIGN_RE = re.compile(r"^(\w+)\s*(:=|\+=|=)\s*(.*)$")
 
@@ -147,7 +151,7 @@ def main(argv):
         libs = mk["LOCAL_SHARED_LIBRARIES"]
         so = out / f"{module}.so"
         link = [f"-l{lib[3:]}" for lib in libs if lib in NDK_LIBS]
-        cmd = ([str(cc)] + CFLAGS + mk["LOCAL_CFLAGS"] + includes + ["-I", str(src)]
+        cmd = ([str(cc)] + CFLAGS + PLATFORM_DEFINES + mk["LOCAL_CFLAGS"] + includes + ["-I", str(src)]
                + [str(src / f) for f in mk["LOCAL_SRC_FILES"]]
                + ["-shared", f"-Wl,-soname,{module}.so", "-o", str(so)] + link)
         print(f"== {hal}: {module}", flush=True)
