@@ -60,7 +60,7 @@ can be set in `ueventd.omap4430.rc`.
 | /dev/rpmsg-omx0 | 0666 | drmrpc | drmrpc | XE24 ramdisk, Justin 6.0 tree |
 | /dev/rpmsg-omx1 | 0666 | drmrpc | drmrpc | XE24 ramdisk, Justin 6.0 tree |
 | /dev/rproc_user | 0666 | drmrpc | drmrpc | XE24 ramdisk, Justin 6.0 tree |
-| /dev/si114x | 0666 | root | root | XE24 ramdisk, Justin 6.0 tree |
+| /dev/si114x | 0666 | root | root | XE24 ramdisk, Justin 6.0 tree (unverified: owner) |
 | /dev/tiler | 0666 | system | system | XE24 ramdisk, Justin 6.0 tree |
 | /dev/timerirq | 0660 | system | system | XE24 ramdisk, Justin 6.0 tree |
 | /dev/ttyO1 | 0600 | bluetooth | bluetooth | XE24 ramdisk, Justin 6.0 tree (unverified: mode; the stock files set the owner only) |

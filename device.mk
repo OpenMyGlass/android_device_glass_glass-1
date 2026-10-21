@@ -48,6 +48,9 @@ DEVICE_PACKAGE_OVERLAYS := \
     device/glass/glass-1/overlay
 
 # Wi-Fi
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/wifi/wpa_supplicant_overlay.conf:system/etc/wifi/wpa_supplicant_overlay.conf
+
 PRODUCT_PACKAGES += \
     libwpa_client \
     dhcpd.conf \
