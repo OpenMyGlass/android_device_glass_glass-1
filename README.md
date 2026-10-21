@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # android_device_glass_glass-1
 
 AOSP device tree for the Google Glass Explorer Edition (`glass-1`, OMAP4430).
@@ -12,7 +14,8 @@ a later change.
 ## Building
 
 The proprietary binaries are extracted from your own device's factory image
-with [glass-rom](https://github.com/OpenMyGlass/glass-rom):
+with [glass-rom](https://github.com/OpenMyGlass/glass-rom)
+(the `tools/` paths below are relative to a glass-rom checkout):
 
     tools/fetch-factory.sh factory/
     tools/sparse.py factory/system.img factory/system.raw
