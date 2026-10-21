@@ -533,13 +533,15 @@ and the gralloc blob, both in `proprietary-files.txt`. Kernel facts below are fr
   (`OMX_TI_IndexConfigCamCapabilities`): sizes, formats, frame rates, 3A modes, zoom, facing and
   mounting angle all come from the firmware. The stock image ships no camera configuration or DCC
   (tuning) files either.
-- DCC: the HAL and the DOMX proxy look for tuning files in `/data/misc/camera/` (`DCC_PATH` in
-  `domx/omx_core/inc/OMX_TI_IVCommon.h`, the path for every release before N). With none there they
-  use the firmware's built-in tuning, as stock most likely does. The DOMX proxy then traces "No DCC
-  files found, switching back to default DCC", but that is a `DOMX_DEBUG` trace (level 5): it shows
-  in logcat only with `setprop debug.domx.trace_level 5` (read when mediaserver starts) or higher. `init.omap4430.rc` creates the directory 0770 media:media
-  (`docs/hardware-facts.md`, Directories), since both run in mediaserver as user media, so the
-  HAL can save DCC data there (`OMXDccDataSave.cpp`). Stock does not create it.
+- DCC: the HAL's `DCCHandler` (`camera/OMXCameraAdapter/OMXDCC.cpp`) loads tuning files from
+  `/data/misc/camera/` (`DCC_PATH` in `domx/omx_core/inc/OMX_TI_IVCommon.h`, the path for every
+  release before N). The DOMX proxy's own DCC code (`omx_proxy_camera.c`) is built only with
+  `TI_CAMERAHAL_USES_LEGACY_DOMX_DCC`, which this tree does not set. With no files the HAL logs
+  "No DCC files found, switching back to default DCC" (`CAMHAL_LOGE`, so `E/CameraHal` in logcat by
+  default) and uses the firmware's built-in tuning, as stock most likely does.
+  `init.omap4430.rc` creates the directory 0770 media:media (`docs/hardware-facts.md`,
+  Directories), since the HAL runs in mediaserver as user media, so it can also save DCC data
+  there (`OMXDccDataSave.cpp`). Stock does not create it.
 - None of the board switches in `camera/Android.mk` apply: `CAMERAHAL_PIRANHA` and
   `CAMERAHAL_TUNA`/`DOMX_TUNA` key on `TARGET_BOOTLOADER_BOARD_NAME` (Glass's is `glass_1`), and
   `MOTOROLA_CAMERA` keys on `BOARD_VENDOR` being `motorola-omap4`, which this tree does not set.
@@ -606,9 +608,15 @@ The HAL builds against OMAP4-AOSP's sanitized copies in `kernel-headers/` (`vide
 
 - Text, without comments and line breaks: `omap_hwc.h`, `bltsville.h`, every `bv*.h`, `ocd.h` and
   the user part of `omapfb.h` (with `OMAPFB_ENABLEVSYNC`) are the same. `dsscomp.h` differs in
-  three ways: the kernel's `struct dss2_ovl_cfg` has two more `__u8` fields at the end
+  three ways that matter: the kernel's `struct dss2_ovl_cfg` has two more `__u8` fields at the end
   (`force_1d`, `mflag_en`), the kernel adds `DSSCIOC_WB_DONE` (136), which the HAL does not use, and
-  `struct dsscomp_videomode` sits outside the `__KERNEL__` block.
+  `struct dsscomp_videomode` sits outside the `__KERNEL__` block. The rest is spelling and
+  wrapping: the kernel writes `__aligned(4)` where the copy has `__attribute__ ((aligned(4)))`, and
+  wraps the exported enums and structs in `#ifdef __KERNEL__` (where it includes
+  `video/omapdss.h` instead) `#else`. Inside the kernel, `omapdss.h` gives `enum s3d_disp_type`
+  other values (`S3D_DISP_FRAME_PACKING = 0` and so on, against `S3D_DISP_NONE = 0` on the user
+  side), which matters only for HDMI/S3D and is inert on Glass, and `enum omap_dss_display_state`
+  has no `OMAP_DSS_DISPLAY_TRANSITION`, which exists only on the user side.
 - Layout, from a probe compiled for armv7a-linux-androideabi19 against each copy: every struct size,
   the offsets the HAL relies on and every ioctl number the HAL uses are identical. The two extra
   fields fall into the padding of `dss2_ovl_cfg` (96 bytes in both, `__aligned(4)`), and the HAL
