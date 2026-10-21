@@ -31,8 +31,9 @@ A new HAL adds its directory to `HALS`, any new AOSP project to the lock file (b
 tag commit from `git ls-remote <url> refs/tags/<tag>^{}`), and its non-NDK symbols to the allowlist.
 
 Host tests: `tests/test_hal_logic.py` builds `tests/hal_logic_test.c` with the pure-logic files
-(`power/power_logic.c`, `lights/lights_logic.c`) and runs it against a scratch directory that stands
-in for sysfs. `tests/test_build_hals.py` tests the `Android.mk` reader and the symbol checks.
+(`power/power_logic.c`, `lights/lights_logic.c`), and `tests/sensors_logic_test.c` with
+`sensors/sensors_logic.c`, and runs each against a scratch directory that stands in for sysfs.
+`tests/test_build_hals.py` tests the `Android.mk` reader and the symbol checks.
 
 ### Differences between 4.4 and 6.0
 
@@ -42,6 +43,12 @@ in for sysfs. `tests/test_build_hals.py` tests the `Android.mk` reader and the s
   (`setFeature`, `POWER_FEATURE_DOUBLE_TAP_TO_WAKE`), `POWER_HINT_LOW_POWER`, and gives
   `POWER_HINT_INTERACTION` a duration in milliseconds as data. The power HAL declares API 0.2 and
   uses none of the 6.0 additions, so no `#if` is needed.
+- `hardware/sensors.h`: both have device API 1.0 and 1.1 (`batch`, `flush`,
+  `META_DATA_FLUSH_COMPLETE`), the same `sensors_event_t`, and the types the sensors HAL uses
+  (including the uncalibrated ones, 14 and 16). 6.0 adds device API 1.2 to 1.4, and `sensor_t` gains
+  `stringType`, `requiredPermission`, `maxDelay` and `flags` in place of four of the six reserved
+  pointers. The sensors HAL fills those only under `#ifdef SENSORS_DEVICE_API_VERSION_1_3`, which only
+  the 6.0 header defines.
 - Build: 4.4's `log/uio.h` needs `HAVE_SYS_UIO_H`, which the 4.4 build gets from its force-included
   `build/core/combo/include/arch/linux-arm/AndroidConfig.h` (line 114). `tools/build-hals.py` defines it
   for both targets; 6.0 ignores it.
@@ -184,13 +191,195 @@ How the receiver stays off:
 `power_profile.xml` keeps `gps.on`. Whether to drop the feature until the phone-backed provider
 exists is an owner decision.
 
+## Sensors HAL (`sensors/`, `sensors.glass_1`)
+
+Replaces the stock `sensors.glass_1.so`, a shim over InvenSense's proprietary MPL
+(`libinvensense_hal.so`, `libmllite.so`, `libmplmpu.so`) and a DMP firmware image. That blob is
+dropped from `proprietary-files.txt`. The facts come from `docs/specs/sensors.md` (a clean-room spec
+written by a separate reverse-engineering agent, cited below as "spec §n") and from the GPL kernel
+source. No MPL code, DMP image or InvenSense library is used: the driver's raw mode gives
+accelerometer, gyroscope and compass data without firmware (spec §4.6). Kernel line numbers in
+this section, like the spec's, are from `glass-omap-xrx13b-stable-3.4.113`.
+
+Interface: `sensors_module_t` with module API 0.1 and a legacy `sensors_poll_device_1` at device
+API 1.1, the level of the stock HAL (spec §2). Both 4.4's and 6.0's SensorService take it (6.0 logs
+"Upgrade sensor HAL to version 1_3" and derives the reporting mode from the type).
+
+| Handle | Type | Source | Range | Resolution | Min delay | Power (mA) |
+|---|---|---|---|---|---|---|
+| 1 | ACCELEROMETER | MPU-9150 accel, IIO raw | 19.6133 m/s² (±2 g) | 0.000599 m/s² | 5 ms | 0.0 (stock value) |
+| 2 | MAGNETIC_FIELD | AK8975 behind the MPU, IIO raw, hard-iron calibrated | 1200 µT | 0.3 µT | 10 ms | 10.0 |
+| 3 | GYROSCOPE | MPU-9150 gyro, IIO raw, bias at rest removed | 34.9066 rad/s (±2000 °/s) | 0.0010653 rad/s | 5 ms | 5.5 |
+| 4 | LIGHT | `ltr506_als` input device | 64000 | 1.0 | on change | 0.75 |
+| 5 | MAGNETIC_FIELD_UNCALIBRATED | as 2, with the bias it removes | as 2 | | 10 ms | 10.0 |
+| 6 | GYROSCOPE_UNCALIBRATED | as 3, with the bias it removes | as 3 | | 5 ms | 5.5 |
+
+The slowest continuous rate is 4 Hz (`maxDelay` 250 ms on 6.0), the kernel's minimum FIFO rate.
+`fifoReservedEventCount` and `fifoMaxEventCount` are 0: there is no hardware batching. Orientation,
+rotation vector, game rotation vector, gravity and linear acceleration are not listed: SensorService
+on 4.4 and 6.0 registers its own virtual sensors when the HAL has an accelerometer, a gyroscope and a
+magnetometer (spec §7). The stock vendor sensors GLU and TAP need the DMP image and are left out (owner
+decision below). `permissions/hardware.xml` already declares accelerometer, compass, gyroscope and
+light.
+
+Code: `sensors/sensors_logic.c` holds the parts the host tests cover (the sensor table and its
+checks, the IIO configuration and the sysfs write sequence, scan-type parsing, record layout and
+parsing, matrices, unit and clock conversions, the calibrations, the calibration file format, and
+finding the devices by name). `sensors/sensors.c` is the HAL glue: files, threads, events.
+
+### Data path
+
+- One reader thread polls `/dev/iio:deviceN`, the ALS event node and a wake pipe, and puts events in
+  a 256-entry queue (the oldest is dropped when it is full, with a log line). `poll()` waits on the
+  queue. `flush()` queues `META_DATA_FLUSH_COMPLETE` behind the events already there, and returns
+  `-EINVAL` for a sensor that is not enabled. `batch()` accepts only a zero timeout, as stock
+  (spec §2); 4.4's and 6.0's `SystemSensorManager` then retry in continuous mode ("Try continuous
+  mode if batching fails").
+- The IIO device is found by its `name`, `mpu9150` (`board-notle.c:1742`), not assumed to be
+  `iio:device0`. The trigger name is read from `trigger0/name`, falling back to `<name>-dev<N>`
+  (`inv_mpu_trigger.c:67`).
+- Enable sequence (`sns_plan_iio`, spec §4.6): `power_state` 1, `buffer/enable` 0, `dmp_on` 0 only
+  if `firmware_loaded` is 1, `gyro_enable`, `accl_enable`, `compass_enable`, `in_anglvel_scale` 3
+  and `in_accel_scale` 0 (index form: ±2000 °/s and ±2 g, the probe defaults), `sampling_frequency`,
+  every `scan_elements/*_en` (quaternion off, all three axes of each enabled sensor, timestamp on),
+  `trigger/current_trigger`, `buffer/length` 480, `buffer/enable` 1. With nothing enabled:
+  `buffer/enable` 0 and `power_state` 0. A failed required write switches the IIO side off and
+  fails the `activate`.
+- Rate: the fastest requested rate among enabled motion sensors, rounded up to whole Hz, clamped to
+  4-200 Hz (100 Hz for the compass alone). With the compass on, a rate above 100 Hz becomes 200 Hz:
+  the driver reads the compass every `10 × rate / 1000` samples (`inv_mpu_core.c:655-659`), which at
+  101-199 Hz is every sample, faster than the AK8975 converts. Sensors may get events faster than
+  asked; the HAL does not decimate.
+- Records are parsed by the enabled scan elements: sizes from `scan_elements/*_type`
+  (`le:s16/16>>0`, falling back to the spec §4.4 types), each element aligned to its size and the
+  timestamp last, as `iio_sw_buffer_preenable` computes it. The format byte before the timestamp
+  must equal the enabled set (0x02 gyro, 0x04 accel, 0x08 compass); other records are dropped and
+  counted. An all-zero compass triple means "no new sample" (spec §4.4) and is skipped.
+- Mounting: the HAL reads `gyro_matrix`, `accl_matrix` and `compass_matrix` and applies body = M ×
+  chip (spec §4.3). A matrix that is not a signed permutation is replaced by the identity, with an
+  error in the log.
+- Units (spec §4.2), with the scales read back after power-on (they read `-EINVAL` while the chip
+  sleeps, `mpu_read_raw`): gyro raw × FSR/32768 × π/180 rad/s, accel raw × FSR/32768 × 9.80665 m/s²,
+  compass raw × `in_magn_scale`/2³⁰ µT.
+
+### Timestamps
+
+Android 5 and later want `CLOCK_BOOTTIME`. IIO records carry the OMAP 32 kHz "robust clock"
+(spec §4.5), which keeps counting in suspend but has another zero. After every IIO
+reconfiguration, and every 10 s while data flow, the HAL reads `temperature` three times between two
+`clock_gettime(CLOCK_BOOTTIME)` calls; the attribute prints the robust clock
+(`inv_mpu_core.c:1164`). The narrowest bracket (under 20 ms) gives the offset: its midpoint minus
+the robust value. Until one is measured, the newest record of the first read is taken as "now". The
+light sensor's evdev is switched to `CLOCK_MONOTONIC` with `EVIOCSCLOCKID` (`evdev.c:764`; this
+kernel has no boottime option there), or left on `CLOCK_REALTIME` if that fails, and converted with
+both clocks read at once. Every sensor's stamps are clamped to never be after now and to increase
+strictly.
+
+### Calibration
+
+- Magnetometer (hard iron): samples at least 5 µT from every kept one go into a ring of 48. Every 8
+  new points, with at least 24, a linear least-squares sphere fit runs. Its center becomes the bias
+  only if the radius is 15-100 µT (the geomagnetic field is about 25-65 µT), the RMS residual at
+  most max(1.5 µT, 10 % of the radius), and the points not flat: their spread along the thinnest
+  direction must be at least 12 % of the radius (a head turning about one axis traces a circle,
+  which fixes no center). A new fit reports accuracy HIGH; until then UNRELIABLE.
+  The bias is saved as text (`glass-magcal 1 <bx> <by> <bz> <radius>`) to
+  `/data/misc/sensors/glass_magcal.txt` through a temporary file and `rename`, at most every
+  5 minutes, and when the compass turns off or the HAL closes. A saved bias loads as accuracy MEDIUM.
+  The file is rejected if malformed or out of range. `init.omap4430.rc` creates the directory
+  (0770 system system, `docs/hardware-facts.md` Directories).
+- Gyroscope (`GLASS_GYRO_BIAS_AT_REST` in `sensors/sensors.c`, on): in each 2 s window of at least 20
+  samples, if every axis' standard deviation is at most 0.004 rad/s (about 4 LSB) and the mean is
+  under 0.35 rad/s, the mean becomes the bias. GYROSCOPE reports raw minus bias (accuracy MEDIUM
+  until a first bias, then HIGH); GYROSCOPE_UNCALIBRATED reports raw and the bias. The bias is not
+  saved. The framework's fusion also estimates its own gyro drift.
+- Accelerometer: none.
+
+### Light
+
+The ALS input device is found by name (`ltr506_als`, `ltr506als.c:1777`) under `/sys/class/input`,
+which gives both its `inputN` (for `als_enable`) and its `eventM` node; input2/input3 are not
+assumed (spec §6). `als_enable` is written on activate and deactivate, through
+`/sys/class/input/inputN/als_enable` or, if that fails, the I2C device's
+`/sys/devices/platform/omap_i2c.4/i2c-4/4-003a/als_enable` (same handler). The value is reported as
+lux without scaling, as stock (spec §6): no lux factor is known yet. One event per `SYN_REPORT` that
+follows an `ABS_MISC`.
+
+### Permissions
+
+The system server (uid system, groups including input, 1004, per ZygoteInit `--setgroups` at both
+tags) opens everything:
+- `/dev/iio:device0` 0664 system (ueventd); every IIO attribute the HAL writes is chowned to system
+  0664 in `init.omap4430.rc` (`power_state`, `buffer/*`, `dmp_on`, the three `*_enable`,
+  `in_anglvel_scale`, `in_accel_scale`, `sampling_frequency`, `scan_elements/*_en`,
+  `trigger/current_trigger`); the ones it only reads (matrices, `*_scale`, `firmware_loaded`,
+  `temperature`, `scan_elements/*_type`, `name`, `trigger0/name`) are readable.
+- `/dev/input/event*` is 0660 root input (AOSP `ueventd.rc`).
+- `als_enable` is 0666 in the driver (`ltr506als.c:1186`), so the hard-coded input2 chowns in
+  `init.omap4430.rc` are not needed for it (they stay, as stock facts).
+- New: `mkdir /data/misc/sensors 0770 system system` `on boot`.
+
+The paths in `init.omap4430.rc` still say `iio:device0`; if the IIO device ever gets another
+number, those chowns need the new path (device checklist).
+
+### Proximity
+
+Left out, as on stock: the `ltr506_ps` device reports raw ADC 0..4095 (`ltr506als.c:428-437`) and
+would need a near/far threshold measured on a device, and Glass has no use for a face-down screen
+switch. `permissions/hardware.xml` does not declare it.
+
+### Departures from the spec
+
+- Uncalibrated magnetometer and gyroscope are listed (spec §7 "optional"): they share the hardware
+  and cost nothing.
+- `fifoMaxEventCount` is 0, not the stock 100: nothing batches.
+- Compass alone keeps the accel engine on but out of the FIFO (`accl_enable` 1, accel scan elements
+  0). The spec's sequence does not cover the compass alone; the compass is read from the MPU's
+  data-ready interrupt, and whether that runs with both engines in standby is not known. To check on
+  a device.
+- Rate: rounded up instead of truncated (stock `1e9 / delay`), and moved to 200 Hz when the compass is
+  on and the rate is above 100 Hz (see Data path).
+- The format byte must equal the enabled set, where stock only rejects the top four bits. It drops
+  records of an earlier layout of the same size after a reconfiguration.
+- `in_timestamp_en` gets `1` (stock writes "480", spec §5.1; any non-zero enables). `dmp_event_int_on`,
+  `dmp_output_rate` and the GLU/TAP attributes are not written: no DMP.
+- ALS: enabled only while the light sensor is active (stock enables it at construction and keeps it
+  on, spec §6). Events carry `CLOCK_BOOTTIME`, not the stock `CLOCK_REALTIME`, and IIO events too
+  (spec §4.5 recommends this).
+- Names and vendors are the parts' ("MPU-9150 Accelerometer", "InvenSense"; "AK8975
+  Magnetometer", "AKM"; "LTR-506ALS Light", "LiteOn"), not the stock "MPL ..." names. Power figures
+  are the stock ones, including 0.0 mA for the accelerometer.
+- The HAL writes `power_state` 0 and `buffer/enable` 0 at open, to start from a known state.
+
+### Owner decisions
+
+- GLU (head-wake "look up") and TAP: they need the proprietary DMP image (spec §5.4), which this tree
+  must not ship. Options: leave them out (current), let a user load their own image at runtime, or
+  write a software look-up detector on the accelerometer later.
+- Light: a lux factor needs a measurement against a lux meter (spec §9 question 4).
+- Gyro bias at rest is on; set `GLASS_GYRO_BIAS_AT_REST` to 0 to report raw gyro data.
+
+### Sensors: what a 4.4 branch needs
+
+Nothing in the sources: the same `sensors/` builds against 4.4 headers (`sensor_t` without the 6.0
+fields), and CI builds it at API level 19. 4.4 sets no time base for sensor timestamps (the
+`elapsedRealtimeNanos` rule came with 5.0); `CLOCK_BOOTTIME` is a valid choice there and stays
+consistent across suspend, but a 4.4 app that compares stamps with `System.nanoTime()`
+(`CLOCK_MONOTONIC`) sees them drift apart after a suspend (device checklist). The 4.4 tree needs the
+`PRODUCT_PACKAGES` entry, the `/data/misc/sensors` mkdir in `init.omap4430.rc`, and the existing IIO
+chowns, which the stock 4.4 ramdisk already has. On 4.4, `SensorService` on a 1.1 HAL uses `batch`
+and `flush` the same way (the stock HAL was 1.1 on 4.4). If a 4.4 build still installs the stock MPL
+libraries for another reason, they stay unused.
+
 ## What a 4.4 branch needs
 
-Both HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
+All three HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
 - Power: nothing beyond the tree's `PRODUCT_PACKAGES` line. 4.4's `init.rc` already gives system the
   governor files (above), and 4.4's PowerManagerService uses power API 0.2. `hardware/ti/omap4` on a 4.4
   tree may add its own `power.omap4`; it stays unused for the same lookup-order reason.
 - Lights: nothing beyond `PRODUCT_PACKAGES` and the `brightness` chown in `init.omap4430.rc`, which the
   stock 4.4 ramdisk already has. 4.4's LightsService handles a NULL device for absent lights as 6.0's does.
+- Sensors: nothing beyond `PRODUCT_PACKAGES` and the `/data/misc/sensors` mkdir in
+  `init.omap4430.rc` (see "Sensors: what a 4.4 branch needs" above).
 - SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server to write
   `sysfs` on both trees.

@@ -61,12 +61,13 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     camera.omap4
 
-# Open HALs (power/, lights/; docs/hals.md). libhardware tries ro.product.board (glass_1)
-# before ro.board.platform (omap4), so these win over any *.omap4 module. power.omap4 stays
-# installed but unused: hardware/ti/omap4/omap4.mk, inherited above, adds it.
+# Open HALs (power/, lights/, sensors/; docs/hals.md). libhardware tries ro.product.board
+# (glass_1) before ro.board.platform (omap4), so these win over any *.omap4 module. power.omap4
+# stays installed but unused: hardware/ti/omap4/omap4.mk, inherited above, adds it.
 PRODUCT_PACKAGES += \
     lights.glass_1 \
-    power.glass_1
+    power.glass_1 \
+    sensors.glass_1
 
 # Filesystem
 PRODUCT_PACKAGES += \
