@@ -33,6 +33,7 @@ INCLUDE_DIRS = (
     "hardware/libhardware/include",
     "system/core/include",
     "system/media/audio/include",
+    "system/media/audio_utils/include",
     "external/tinyalsa/include",
 )
 CFLAGS = ["-std=gnu99", "-O2", "-fPIC", "-Wall", "-Werror", "-fno-common"]

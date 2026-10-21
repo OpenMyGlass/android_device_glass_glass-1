@@ -69,6 +69,18 @@ PRODUCT_PACKAGES += \
     power.glass_1 \
     sensors.glass_1
 
+# Audio (audio/; docs/hals.md). Our primary HAL and policy replace the stock blobs. The a2dp,
+# usb and r_submix modules are AOSP's; tinymix is for debugging the mixer.
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/audio/audio_policy.conf:system/etc/audio_policy.conf
+
+PRODUCT_PACKAGES += \
+    audio.a2dp.default \
+    audio.primary.glass_1 \
+    audio.r_submix.default \
+    audio.usb.default \
+    tinymix
+
 # Filesystem
 PRODUCT_PACKAGES += \
     e2fsck \
