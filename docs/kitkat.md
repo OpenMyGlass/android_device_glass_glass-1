@@ -122,11 +122,11 @@ None is measured yet; plan Task 7 measures them on a device.
 
 | Item | Where | Revert |
 |---|---|---|
-| Apps and services not built: the phone (TeleService, TelephonyProvider, WAPPushManager); Browser, Calculator, Calendar, Camera2, Contacts, DeskClock, Email, Exchange2, Gallery2, Music, QuickSearchBox, OneTimeInitializer, VideoEditor; Launcher2; the input methods (LatinIME, OpenWnn, PinyinIME and dictionaries); live wallpapers and WallpaperCropper; the dreams (BasicDreams, PhotoTable); PrintSpooler | `GLASS_REMOVED_PACKAGES` in `BoardConfig.mk` | delete a name |
-| Not voice or SMS capable | `config_voice_capable`, `config_sms_capable` in `overlay/.../values/config.xml` | set true |
+| Apps and services not built: WAPPushManager; Browser, Calculator, Calendar, Camera2, Contacts, DeskClock, Email, Exchange2, Gallery2, Music, QuickSearchBox, OneTimeInitializer, VideoEditor; Launcher2; the input methods (LatinIME, OpenWnn, PinyinIME and dictionaries); live wallpapers and WallpaperCropper; the dreams (BasicDreams, PhotoTable) | `GLASS_REMOVED_PACKAGES` in `BoardConfig.mk` | delete a name |
+| Not voice or SMS capable, no mobile network | `config_voice_capable`, `config_sms_capable`, `networkAttributes` and `radioAttributes` (Wi-Fi and Bluetooth only, as AOSP's Wi-Fi-only grouper) in `overlay/.../values/config.xml` | set true / drop the arrays |
 | No screen savers | `config_dreamsSupported` in the same overlay | set true |
 | Heap 5m/48m/128m for the 640x360 display (was phone-xhdpi-1024's 8m/96m/256m; XE24 used 5m/72m/192m) | `device.mk`, `phone-hdpi-512-dalvik-heap.mk` | inherit the xhdpi-1024 file |
-| Cortex-A9 code generation (`-mcpu=cortex-a9`, `--no-fix-cortex-a8`) | OpenMyGlass/android_build, `armv7-a-neon.mk`; the variant comes from `hardware/ti/omap4` | pin omap4-aosp's build in the manifest |
+| Cortex-A9 code generation (`-mcpu=cortex-a9`, `--no-fix-cortex-a8`) | OpenMyGlass/android_build `glass-4.4`, `armv7-a-neon.mk`, pinned by OpenMyGlass/manifest from its first merged version; the variant comes from `hardware/ti/omap4` | pin omap4-aosp's build in the manifest |
 
 Why a filter. `inherit-product` only adds packages, so `BoardConfig.mk` filters the product's
 `PRODUCT_PACKAGES`. `build/core/config.mk` reads it after product configuration
@@ -136,6 +136,11 @@ What stays:
 - AOSP's minimal `Home` (from `core_base.mk`) as the home screen until the Glass launcher (R5)
   exists. 4.4's ActivityManager finishes booting when the first activity, the home screen, goes
   idle, so some home app has to be there.
+- TeleService and TelephonyProvider: 4.4 Settings runs About > Status in the `com.android.phone`
+  process and calls `PhoneFactory.getDefaultPhone()`, so without TeleService that screen
+  crashes. AOSP's Wi-Fi-only 4.4 tablets kept it too.
+- PrintSpooler: without it, system_server's print service waits 10 s on each boot for a
+  spooler that never binds.
 - Settings, SystemUI, Keyguard, Bluetooth, Provision, CertInstaller, KeyChain, FusedLocation,
   DocumentsUI, DownloadProviderUi, PackageInstaller, PicoTts, and the providers.
 
@@ -145,6 +150,9 @@ Not done here:
 - Logger buffer sizes: a kernel source change, glass-kernel.
 - `preloaded-classes` and `preloaded_drawables` trimming: generated on a device.
 - A minimal SystemUI.
+- No input method is built (input comes from the phone), but `permissions/hardware.xml` still
+  declares `android.software.input_methods`. Typing on the device (a Wi-Fi password, for
+  example) needs `adb shell input text`. Whether to drop the feature is open.
 - Wi-Fi sleep policy and the Bluetooth sniff and timeout values: they need measurement first.
   `wifi.supplicant_scan_interval=60` and `bluetooth.enable_timeout_ms` are already in
   `system.prop`.
@@ -167,8 +175,8 @@ All not run (no hardware). Use `fastboot boot` only; never flash `bootloader`, `
 - Installing an APK logs `installd: Running /system/bin/dex2oat ... filter=space`; `dumpsys meminfo` works.
 - Time from `fastboot boot` to `sys.boot_completed=1` on the first boot, and the size of
   `/data/dalvik-cache` (plan Task 3).
-- Lean: `pm list packages` has none of `GLASS_REMOVED_PACKAGES`; system_server does not crash
-  in a loop without TeleService; `dumpsys telephony.registry` works; an app calling
+- Lean: `pm list packages` has none of `GLASS_REMOVED_PACKAGES`; Settings > About > Status opens;
+  Settings shows no "Mobile networks" entry; `dumpsys telephony.registry` works; an app calling
   `TelephonyManager.getDeviceId()` gets null, not a crash; the home screen is AOSP's `Home`;
   SystemUI shows the low-battery warning; Wi-Fi and Bluetooth reconnect after screen-off;
   `readelf -A /system/lib/libc.so` shows `Tag_CPU_name: "Cortex-A9"`.
