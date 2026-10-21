@@ -535,12 +535,14 @@ and the gralloc blob, both in `proprietary-files.txt`. Kernel facts below are fr
   (tuning) files either.
 - DCC: the HAL and the DOMX proxy look for tuning files in `/data/misc/camera/` (`DCC_PATH` in
   `domx/omx_core/inc/OMX_TI_IVCommon.h`, the path for every release before N). With none there they
-  log "No DCC files found, switching back to default DCC" and use the firmware's built-in tuning,
-  as stock most likely does. `init.omap4430.rc` creates the directory 0770 media:media
+  use the firmware's built-in tuning, as stock most likely does. The DOMX proxy then traces "No DCC
+  files found, switching back to default DCC", but that is a `DOMX_DEBUG` trace (level 5): it shows
+  in logcat only with `setprop debug.domx.trace_level 5` (read when mediaserver starts) or higher. `init.omap4430.rc` creates the directory 0770 media:media
   (`docs/hardware-facts.md`, Directories), since both run in mediaserver as user media, so the
   HAL can save DCC data there (`OMXDccDataSave.cpp`). Stock does not create it.
-- Glass's board name is `glass_1`, so none of the board switches in `camera/Android.mk` apply
-  (`MOTOROLA_CAMERA`, `CAMERAHAL_PIRANHA`, `CAMERAHAL_TUNA`/`DOMX_TUNA`).
+- None of the board switches in `camera/Android.mk` apply: `CAMERAHAL_PIRANHA` and
+  `CAMERAHAL_TUNA`/`DOMX_TUNA` key on `TARGET_BOOTLOADER_BOARD_NAME` (Glass's is `glass_1`), and
+  `MOTOROLA_CAMERA` keys on `BOARD_VENDOR` being `motorola-omap4`, which this tree does not set.
 - Properties: the HAL reads `ro.product.manufacturer` and `ro.product.model` for EXIF and
   `debug.camera.*`; the flash properties do not matter (Glass has no flash). `omap4.mk` sets
   `camera2.portability.force_api=1`, so apps get camera API 1. No Glass property is needed.
@@ -731,5 +733,6 @@ All four HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
   - Not AOSP `hardware/ti/omap4xxx`: its HWC has no blit path.
   - The same `device.mk` line; nothing in `proprietary-files.txt`.
 - SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server (power,
-  lights, sensors) and mediaserver (audio: `/dev/snd`, `usb_mux.0`, `pause_for_audio`) to use
-  `sysfs` and the device nodes on both trees.
+  lights, sensors) and mediaserver (audio: `/dev/snd`, `usb_mux.0`, `pause_for_audio`; camera: the
+  DCC directory `/data/misc/camera`) to use `sysfs`, the device nodes and that directory on both
+  trees.
