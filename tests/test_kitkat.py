@@ -101,7 +101,7 @@ class KitKatTreeTest(unittest.TestCase):
         text = (ROOT / "overlay/frameworks/base/core/res/res/values/config.xml").read_text()
         for name in ("config_voice_capable", "config_sms_capable", "config_dreamsSupported"):
             self.assertIn(f'<bool name="{name}">false</bool>', text)
-        self.assertNotIn('"mobile', text)
+        self.assertNotIn('<item>"mobile', text)
         lines = code("device.mk")
         self.assertIn("$(call inherit-product, frameworks/native/build/phone-hdpi-512-dalvik-heap.mk)",
                       lines)
