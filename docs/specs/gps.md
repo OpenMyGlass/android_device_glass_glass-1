@@ -102,7 +102,7 @@ local time aiding, NVM state in `/data/gps/nvm` (rc `init.omap4430.rc:284-285` c
 
 None of this is needed for an NMEA HAL.
 
-## 5. Open NMEA HAL design (recommended)
+## 5. Open NMEA HAL design (not adopted: the owner decided against a GPS HAL)
 
 Interfaces: legacy `hw_module_t`/`GpsInterface` (size 40 on KitKat; on 6.0.1 the same struct plus
 `GpsCallbacks` with `set_system_info_cb` is optional — build with `sizeof(GpsInterface)` from the headers in use).

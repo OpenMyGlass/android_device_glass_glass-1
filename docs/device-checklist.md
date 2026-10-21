@@ -26,5 +26,5 @@ All not run.
 
 ## GPS (`docs/hals.md`, No GPS HAL)
 
-- GPS stays off: after boot and after suspend/resume, `cat /sys/class/gps/gps_elton/{onoff,reset,awake}` reads 0, 1, 0 (hibernate), and battery current with the screen off matches a build without any GPS use. Not run.
+- GPS stays off: after a cold boot, after a reboot straight from stock firmware, and after suspend/resume, `cat /sys/class/gps/gps_elton/{onoff,reset,awake}` reads 0, 1, 0 (hibernate), and battery current with the screen off matches a build without any GPS use. Not run.
 - No `gps_elton` writes: `dmesg` has no `Setting on_off` or `Setting reset` lines from the driver, `logcat` shows no GPS HAL loading, and nothing opens `/dev/ttyO3` (`ls -l /proc/*/fd 2>/dev/null | grep ttyO3` is empty). Not run.
