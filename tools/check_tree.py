@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check the device tree: copy sources exist, no binaries, license headers, sorted lists."""
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -12,6 +13,13 @@ SPDX_FILES = ("system.prop", "proprietary-files.txt")
 
 
 def _files(root):
+    if (root / ".git").exists():
+        out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"],
+                             check=True, capture_output=True).stdout
+        for rel in sorted(out.decode().split("\0")):
+            if rel and (root / rel).is_file():
+                yield root / rel, rel
+        return
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root)
         if ".git" in rel.parts or not path.is_file():
