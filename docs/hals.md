@@ -148,6 +148,42 @@ lights HAL was installed. The stock `lights.omap4.so` is not in `proprietary-fil
   (`glasshub.c:1057-1068`) is the IR LED of the wink sensor, and `ps_led` (`ltr506als.c:1098`) is the
   proximity sensor's LED. Both belong to the sensors.
 
+## No GPS HAL
+
+There is no GPS HAL, by the owner's decision. Location will come from the phone through the
+OpenMyGlass companion (a location provider, later work), not from the on-board receiver.
+
+The on-board receiver is a CSR SiRFstarIV GSD4e (`drivers/char/gps_elton.c:1-5`) on OMAP UART4,
+`/dev/ttyO3` (`board-notle.c:1143-1155`, only TX and RX muxed), with three GPIOs: ON_OFF (139),
+RESET_N (140) and AWAKE (138) on EVT2 and later boards (`board-notle.h:75-80`). The kernel driver
+exposes them as `/sys/class/gps/gps_elton/{onoff,reset,awake}`, plus `functional`, which reads 1
+only when the board id is `V1_5_PROTO` (`board-notle.c:2080-2082`; `V1_5_PROTO` is the newest
+board id the board file supports, `board-notle.h:116-118`). The receiver's facts are recorded in
+[`docs/specs/gps.md`](specs/gps.md), which is not implemented.
+
+How the receiver stays off:
+- At boot the board file requests ON_OFF as an output driven low (`board-notle.c:2053-2054`) and
+  RESET_N as an output driven high, out of reset (`board-notle.c:2063-2064`). The GSD4e leaves
+  hibernate only on an ON_OFF pulse (`docs/specs/gps.md`, 4.1), and nothing pulses it, so it stays
+  in hibernate. The driver does nothing on suspend or resume besides logging
+  (`gps_elton.c:116-128`).
+- No HAL or init file in this tree may write `onoff` or `reset`. `rootdir/` neither chowns nor
+  chmods the `gps_elton` files. The driver itself creates all four attributes mode 0666
+  (`gps_elton.c:109-114`), so any process can write `onoff` and `reset`; this tree leaves that kernel
+  default alone and adds no writer.
+- `/dev/ttyO3` keeps its stock owner (system, 0660, `docs/hardware-facts.md`), with nothing opening
+  it. `/data/gps` and `/data/gps/nvm` are still created (stock facts in `docs/hardware-facts.md`)
+  but nothing uses them.
+- `proprietary-files.txt` no longer lists the stock `lib/hw/gps.omap4.so` (the CSR location library)
+  or `vendor/firmware/NVM2`. NVM2 is the receiver's ROM patch, which only that library downloads to
+  the chip (`docs/specs/gps.md`, 4.3, where the CSR library's configuration names it): nothing in
+  this tree or the kernel source does. With no `gps.*.so`, the framework finds no GPS HAL and
+  reports GPS as unsupported.
+
+`permissions/hardware.xml` still declares `android.hardware.location.gps`, and
+`power_profile.xml` keeps `gps.on`. Whether to drop the feature until the phone-backed provider
+exists is an owner decision.
+
 ## What a 4.4 branch needs
 
 Both HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
