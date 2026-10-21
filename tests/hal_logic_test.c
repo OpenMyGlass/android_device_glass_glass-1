@@ -128,7 +128,7 @@ static void test_tunables(void)
     }
 
     {
-        struct glass_power p = GLASS_POWER_INITIALIZER(root, NULL);
+        struct glass_power p = GLASS_POWER_INITIALIZER(root, NULL, 0);
         /* The governor directory is absent: every write fails, nothing crashes. */
         CHECK(glass_power_apply_tunables(&p) == (int)glass_tunables_count);
         for (i = 0; i < glass_tunables_count; i++) {
@@ -179,7 +179,7 @@ static void test_screen_off_cap(void)
     put(root, GLASS_AVAILABLE_FREQS, FREQS);
     put(root, GLASS_SCALING_MAX_FREQ, "1008000\n");
     {
-        struct glass_power p = GLASS_POWER_INITIALIZER(root, GLASS_SCREEN_OFF_MAX_FREQ);
+        struct glass_power p = GLASS_POWER_INITIALIZER(root, GLASS_SCREEN_OFF_MAX_FREQ, 0);
         glass_power_set_interactive(&p, 0);
         CHECK(strcmp(get(root, GLASS_SCALING_MAX_FREQ), "1008000") == 0);
         glass_power_set_interactive(&p, 1);
@@ -191,7 +191,7 @@ static void test_screen_off_cap(void)
     put(root, GLASS_AVAILABLE_FREQS, FREQS);
     put(root, GLASS_SCALING_MAX_FREQ, "1008000\n");
     {
-        struct glass_power p = GLASS_POWER_INITIALIZER(root, TEST_CAP);
+        struct glass_power p = GLASS_POWER_INITIALIZER(root, TEST_CAP, 0);
         glass_power_set_interactive(&p, 1);
         CHECK(strcmp(get(root, GLASS_SCALING_MAX_FREQ), "1008000") == 0);
         glass_power_set_interactive(&p, 0);
@@ -221,7 +221,7 @@ static void test_screen_off_cap(void)
     put(root, GLASS_AVAILABLE_FREQS, FREQS);
     put(root, GLASS_SCALING_MAX_FREQ, "1008000\n");
     {
-        struct glass_power p = GLASS_POWER_INITIALIZER(root, "700000");
+        struct glass_power p = GLASS_POWER_INITIALIZER(root, "700000", 0);
         glass_power_set_interactive(&p, 0);
         CHECK(strcmp(get(root, GLASS_SCALING_MAX_FREQ), "1008000") == 0);
     }
@@ -230,7 +230,7 @@ static void test_screen_off_cap(void)
     root = new_root("notable");
     put(root, GLASS_SCALING_MAX_FREQ, "1008000\n");
     {
-        struct glass_power p = GLASS_POWER_INITIALIZER(root, TEST_CAP);
+        struct glass_power p = GLASS_POWER_INITIALIZER(root, TEST_CAP, 0);
         glass_power_set_interactive(&p, 0);
         CHECK(strcmp(get(root, GLASS_SCALING_MAX_FREQ), "1008000") == 0);
     }
@@ -239,7 +239,7 @@ static void test_screen_off_cap(void)
 static void test_boost(void)
 {
     const char *root = new_root("boost");
-    struct glass_power p = GLASS_POWER_INITIALIZER(root, NULL);
+    struct glass_power p = GLASS_POWER_INITIALIZER(root, NULL, 1);
 
     CHECK(glass_power_boost(&p) == -ENOENT);
     CHECK(p.boostpulse_warned == 1);
@@ -255,6 +255,21 @@ static void test_boost(void)
     CHECK(strcmp(get(root, GLASS_BOOSTPULSE), "11") == 0);
 }
 
+static void test_boost_disabled(void)
+{
+    const char *root = new_root("noboost");
+    struct glass_power p = GLASS_POWER_INITIALIZER(root, NULL, GLASS_BOOSTPULSE_ENABLED);
+
+    CHECK(GLASS_BOOSTPULSE_ENABLED == 0);
+    /* Disabled: no error even without the file, and nothing written when it exists. */
+    CHECK(glass_power_boost(&p) == 0);
+    CHECK(p.boostpulse_warned == 0);
+    put(root, GLASS_BOOSTPULSE, "");
+    CHECK(glass_power_boost(&p) == 0);
+    CHECK(p.boostpulse_fd == -1);
+    CHECK(strcmp(get(root, GLASS_BOOSTPULSE), "") == 0);
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2) {
@@ -267,6 +282,7 @@ int main(int argc, char **argv)
     test_paths();
     test_screen_off_cap();
     test_boost();
+    test_boost_disabled();
     if (failures)
         fprintf(stderr, "%d checks failed\n", failures);
     else

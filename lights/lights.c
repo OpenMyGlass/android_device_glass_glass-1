@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
  * Lights HAL for Glass Explorer Edition (lights.glass_1), legacy hardware/lights.h
- * interface; lights.h is the same in android-6.0.1_r31 and android-5.1.1_r37.
+ * interface; lights.h is the same in android-4.4.4_r2 and android-6.0.1_r31.
  * Glass has one light: the display backlight. The kernel builds no LED class devices
  * (notle_defconfig: CONFIG_NEW_LEDS is not set), so every other light id is refused.
  */

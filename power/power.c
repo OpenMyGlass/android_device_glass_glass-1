@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
  * Power HAL for Glass Explorer Edition (power.glass_1), legacy hardware/power.h interface.
- * Builds against android-6.0.1_r31 and android-5.1.1_r37 headers, whose power.h only
- * differ in a comment (POWER_HINT_INTERACTION's data is a duration from 6.0 on; it is
- * not used here).
+ * Builds against android-4.4.4_r2 and android-6.0.1_r31 headers. It uses only what 4.4's
+ * power.h has (module API 0.2: init, setInteractive, powerHint); 6.0 adds API 0.3
+ * (setFeature), POWER_HINT_LOW_POWER and a duration as POWER_HINT_INTERACTION's data,
+ * none of which is used here.
  */
 #define LOG_TAG "power.glass_1"
 
@@ -39,6 +40,7 @@ static void glass_power_set_interactive_hal(struct power_module *module, int on)
 
 static void glass_power_hint(struct power_module *module, power_hint_t hint, void *data)
 {
+    /* Both hints pulse boostpulse only if GLASS_BOOSTPULSE_ENABLED (power_logic.h). */
     switch (hint) {
     case POWER_HINT_INTERACTION:
         glass_power_boost(state_of(module));
@@ -72,5 +74,6 @@ struct glass_power_module HAL_MODULE_INFO_SYM = {
         .setInteractive = glass_power_set_interactive_hal,
         .powerHint = glass_power_hint,
     },
-    .state = GLASS_POWER_INITIALIZER("", GLASS_SCREEN_OFF_MAX_FREQ),
+    .state = GLASS_POWER_INITIALIZER(
+        "", GLASS_SCREEN_OFF_MAX_FREQ, GLASS_BOOSTPULSE_ENABLED),
 };

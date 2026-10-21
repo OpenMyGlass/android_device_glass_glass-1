@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-# Cross-compile the open HALs with the NDK against AOSP headers of both supported
-# releases. Pinned header commits: tools/aosp-headers.lock. A new HAL directory goes in HALS.
+# Cross-compile the open HALs against AOSP headers of both targets, 4.4.4 and 6.0.1, with
+# the NDK pinned in tools/ndk.env. Pinned header commits: tools/aosp-headers.lock.
+# A new HAL directory goes in HALS.
 name: hals
 on:
   push:
@@ -13,22 +14,31 @@ env:
 jobs:
   hals:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        tag: [android-6.0.1_r31, android-5.1.1_r37]
+        include:
+          - tag: android-4.4.4_r2
+            api: 19
+          - tag: android-6.0.1_r31
+            api: 23
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Cache the NDK zip
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ndk/*.zip
+          key: ndk-${{ hashFiles('tools/ndk.env') }}
+      - name: Fetch the pinned NDK
+        run: echo "ANDROID_NDK_HOME=$(tools/fetch-ndk.sh "$RUNNER_TEMP/ndk")" >> "$GITHUB_ENV"
       - name: Fetch pinned AOSP headers
         run: tools/fetch-aosp-headers.sh "${{ matrix.tag }}" "$RUNNER_TEMP/aosp"
       - name: Cross-compile and check the HALs
         run: |
-          test -n "$ANDROID_NDK_LATEST_HOME"
-          echo "NDK: $ANDROID_NDK_LATEST_HOME"
-          python3 tools/build-hals.py --ndk "$ANDROID_NDK_LATEST_HOME" \
+          python3 tools/build-hals.py --ndk "$ANDROID_NDK_HOME" --api "${{ matrix.api }}" \
             --headers "$RUNNER_TEMP/aosp" --out "$RUNNER_TEMP/out" $HALS

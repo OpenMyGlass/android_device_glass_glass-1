@@ -5,7 +5,9 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := power.glass_1
-LOCAL_MODULE_RELATIVE_PATH := hw
+# LOCAL_MODULE_PATH rather than LOCAL_MODULE_RELATIVE_PATH (5.0 and later): it works on both
+# the 4.4 and 6.0 builds, and the device is 32-bit only.
+LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_MODULE_TAGS := optional
 LOCAL_SRC_FILES := power.c power_logic.c
 LOCAL_SHARED_LIBRARIES := liblog

@@ -9,7 +9,12 @@
 /* The panel driver's brightness attribute (panel-notle-dpi.c registers it under manager2). */
 #define GLASS_PANEL_BRIGHTNESS "/sys/devices/platform/omapdss/manager2/panel-notle-dpi/brightness"
 
-/* The largest brightness the panel driver documents: MAX_BRIGHTNESS in panel-notle-dpi.c. */
+/*
+ * Top of the 0-255 scale that the brightness attribute takes: range_expand and range_reduce
+ * (panel-notle-dpi.c:934-949) convert between it and the driver's internal value, and stock
+ * init writes up to 255. (MAX_BRIGHTNESS, 0xFF at :49, is the internal default of
+ * brightness_limit, :2177, which caps the light at about 223 on this scale.)
+ */
 #define GLASS_PANEL_MAX_BRIGHTNESS 255
 
 /* Perceived brightness (0-255) of an ARGB color; alpha is ignored. */

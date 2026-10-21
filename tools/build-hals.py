@@ -2,16 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Cross-compile HAL directories with the NDK against fetched AOSP headers, and check them.
 
-    tools/build-hals.py --ndk <ndk> --headers <dir> --out <dir> <hal-dir> [<hal-dir> ...]
+    tools/build-hals.py --ndk <ndk> --api <level> --headers <dir> --out <dir> <hal-dir> ...
 
-<headers> is an output directory of tools/fetch-aosp-headers.sh. Each HAL directory's
+<ndk> is the NDK pinned in tools/ndk.env (tools/fetch-ndk.sh), <level> the API level of the
+release whose headers are in <headers> (19 for 4.4, 23 for 6.0), and <headers> an output
+directory of tools/fetch-aosp-headers.sh. Each HAL directory's
 Android.mk is the build description: LOCAL_MODULE, LOCAL_SRC_FILES, LOCAL_CFLAGS and
 LOCAL_SHARED_LIBRARIES are read from it (plain := and += assignments only). Each module is
 built as an ARMv7-A shared library with -Wall -Werror, then checked:
   - it exports HAL_MODULE_INFO_SYM (HMI);
   - it needs only libc, libm, libdl and the libraries its Android.mk lists;
   - every undefined symbol is defined by the NDK's stub for an NDK library it links
-    (libc, libm, libdl, liblog at API level API_LEVEL), or is listed in
+    (libc, libm, libdl, liblog at API level <level>), or is listed in
     tools/hal-symbols.allow for a non-NDK system library it lists in LOCAL_SHARED_LIBRARIES.
 """
 import argparse
@@ -23,7 +25,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ALLOW_FILE = ROOT / "tools" / "hal-symbols.allow"
-API_LEVEL = 21  # oldest the current NDK supports; below Android 5.1 (22) and 6.0 (23)
 TRIPLE = "armv7a-linux-androideabi"
 NDK_LIBS = ("libc", "libm", "libdl", "liblog")
 IMPLICIT_LIBS = ("libc", "libm", "libdl")
@@ -35,9 +36,9 @@ INCLUDE_DIRS = (
     "external/tinyalsa/include",
 )
 CFLAGS = ["-std=gnu99", "-O2", "-fPIC", "-Wall", "-Werror", "-fno-common"]
-# What the AOSP build itself defines for these headers. 5.1 force-includes
-# build/core/combo/include/arch/linux-arm/AndroidConfig.h, which sets HAVE_SYS_UIO_H (line 101);
-# without it, 5.1's log/uio.h redefines struct iovec. 6.0 no longer reads it.
+# What the AOSP build itself defines for these headers. 4.4 force-includes
+# build/core/combo/include/arch/linux-arm/AndroidConfig.h, which sets HAVE_SYS_UIO_H (line 114
+# at android-4.4.4_r2); without it, 4.4's log/uio.h redefines struct iovec. 6.0 ignores it.
 PLATFORM_DEFINES = ["-DHAVE_SYS_UIO_H=1"]
 VARS = ("LOCAL_MODULE", "LOCAL_SRC_FILES", "LOCAL_CFLAGS", "LOCAL_SHARED_LIBRARIES")
 ASSIGN_RE = re.compile(r"^(\w+)\s*(:=|\+=|=)\s*(.*)$")
@@ -115,23 +116,25 @@ def needed(tool, path):
 
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--ndk", default=os.environ.get("ANDROID_NDK_LATEST_HOME")
-                    or os.environ.get("ANDROID_NDK_HOME"))
+    ap.add_argument("--ndk", default=os.environ.get("ANDROID_NDK_HOME"))
+    ap.add_argument("--api", type=int, required=True)
     ap.add_argument("--headers", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("hals", nargs="+")
     args = ap.parse_args(argv)
     if not args.ndk:
-        ap.error("no NDK: pass --ndk or set ANDROID_NDK_LATEST_HOME")
+        ap.error("no NDK: pass --ndk or set ANDROID_NDK_HOME")
 
     bindirs = list(Path(args.ndk).glob("toolchains/llvm/prebuilt/*/bin"))
     if len(bindirs) != 1:
         sys.exit(f"error: no single NDK LLVM toolchain under {args.ndk}")
     bindir = bindirs[0]
-    cc = bindir / f"{TRIPLE}{API_LEVEL}-clang"
+    cc = bindir / f"{TRIPLE}{args.api}-clang"
+    if not cc.exists():
+        sys.exit(f"error: this NDK has no compiler for API level {args.api}: {cc}")
     llvm_nm = bindir / "llvm-nm"
     readelf = bindir / "llvm-readelf"
-    stubs = bindir.parent / "sysroot" / "usr" / "lib" / "arm-linux-androideabi" / str(API_LEVEL)
+    stubs = bindir.parent / "sysroot" / "usr" / "lib" / "arm-linux-androideabi" / str(args.api)
     ndk_symbols = {lib: set(nm(llvm_nm, stubs / f"{lib}.so", True)) for lib in NDK_LIBS}
     allow = read_allowlist(ALLOW_FILE.read_text()) if ALLOW_FILE.exists() else {}
 
