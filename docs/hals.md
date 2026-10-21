@@ -34,9 +34,19 @@ Host tests: `tests/test_hal_logic.py` builds `tests/hal_logic_test.c` with the p
 (`power/power_logic.c`, `lights/lights_logic.c`), and `tests/sensors_logic_test.c` with
 `sensors/sensors_logic.c`, and runs each against a scratch directory that stands in for sysfs.
 `tests/test_build_hals.py` tests the `Android.mk` reader and the symbol checks.
+`tests/test_audio_logic.py` builds `tests/audio_logic_test.c` with `audio/audio_logic.c` and
+`tests/mock_tinyalsa.c`, a fake tinyalsa mixer with the kernel's control names, channel counts and
+ranges, and checks the policy file and the sysfs owners against `docs/hardware-facts.md`.
 
 ### Differences between 4.4 and 6.0
 
+- `hardware/audio.h`: both have device API 2.0, which the audio HAL declares. 6.0 adds API 3.0
+  (audio patches and ports) and longer `open_output_stream` (`address`) and `open_input_stream`
+  (`flags`, `address`, `source`) signatures, which the HAL selects with
+  `#ifdef AUDIO_DEVICE_API_VERSION_3_0`. `system/audio.h` is in system/core at 4.4 and in
+  system/media at 6.0; `tools/build-hals.py` has both include roots, and also
+  `system/media/audio_utils/include` for the resampler. tinyalsa's `asoundlib.h` and
+  audio_utils' `resampler.h` have everything the HAL uses at both tags.
 - `hardware/lights.h` is the same.
 - `hardware/power.h`: 4.4 has power module API 0.1 and 0.2 (`init`, `setInteractive`, `powerHint`
   with `POWER_HINT_VSYNC`, `_INTERACTION`, `_VIDEO_ENCODE`, `_VIDEO_DECODE`). 6.0 adds API 0.3
@@ -391,9 +401,120 @@ chowns, which the stock 4.4 ramdisk already has. On 4.4, `SensorService` on a 1.
 and `flush` the same way (the stock HAL was 1.1 on 4.4). If a 4.4 build still installs the stock MPL
 libraries for another reason, they stay unused.
 
+## Audio HAL (`audio/`, `audio.primary.glass_1`)
+
+Written from [docs/specs/audio.md](specs/audio.md) (a clean-room specification of the stock HAL,
+cited below as "spec") and the GPL kernel. It replaces the stock `audio.primary.glass_1.so` and
+`audio_policy.conf`, which are no longer in `proprietary-files.txt`. The stock `libtinyalsa.so` and
+`libglassalsa.so` are not used: the HAL links AOSP's own `libtinyalsa` and `libaudioutils`. It is
+new code in the usual layout of AOSP tinyalsa HALs (as in device/samsung/tuna/audio); no code is
+copied from tuna or any other HAL, so there is no third-party copyright notice to carry.
+
+- `audio_hw.c`: the `audio_hw_device`, device API 2.0 (`AUDIO_DEVICE_API_VERSION_2_0`), module API
+  0.1. One primary output and one input; no voice call (`set_mode` and `set_voice_volume` do
+  nothing) and no Bluetooth SCO, as on stock (spec 2, 5.3). Master volume is left to AudioFlinger.
+- `audio_logic.c`: the mixer tables, path choice, parameter parsing, pcm parameters, down-mix and
+  sysfs access, tested on the host (see CI).
+- `audio_policy.conf`: our own file in AOSP format from the facts of spec section 3, installed
+  to `/system/etc`.
+
+| What | Value | Source |
+|---|---|---|
+| Card | 0, "Notle" (`omap-abe-twl6040`); the HAL refuses to open unless the 10 controls of spec 4.1 exist | spec 1, 4.1 |
+| Mixer at open | the table of spec 4.2 in order, every channel; `DL1 PDM Switch` once, not twice; `Earphone Playback Volume` 12 instead of 15 (below); then the earpiece path | spec 4.2; `omap-abe-mixer.c`, `twl6040.c` |
+| Playback | device 0 (ABE Multimedia FE), `PCM_OUT \| PCM_MONOTONIC`, S16_LE stereo 48000 Hz, 4 periods of 1056 frames (88 ms), `pcm_write` | spec 5.1, 7 |
+| Earpiece path (no earbud) | `Earphone Playback Switch` 1, `Headset Left/Right Playback` "Off": the bone conduction transducer on the TWL6040 EP output | spec 4.3 |
+| Headset path (earbud on USB) | `Earphone Playback Switch` 0, `Headset Left/Right Playback` "HS DAC" | spec 4.3; `twl6040.c:639-641` |
+| Earbud detection | read `/sys/devices/platform/usb_mux.0/headset` at each output start and routing change: `Mono`, `Stereo`, else none | spec 4.3; `notle-usb-mux.c:543-570` |
+| Mux | `mux_mode` ← `audio` when an earbud is detected | spec 4.3, 7; `notle-usb-mux.c:417-447` |
+| Plug monitoring | `id_monitor` ← `1` at output start, `0` at standby | spec 4.3; `notle-usb-mux.c:460-478` |
+| Down-mix | (L+R)/2 on both channels for the transducer and a mono earbud; a stereo earbud gets stereo | spec 6, 7 |
+| Capture | device 2 (ABE Voice FE, VX_UL ← `MUX_VX0/1` ← DMIC0 L/R), `PCM_IN`, always 2 channels: 48000 Hz (1056 x 4) above 16 kHz, 16000 Hz (384 x 2) from 8001, 8000 Hz (192 x 2) below; `audio.in.rate` picks the config instead of the requested rate | spec 5.2 |
+| Accepted capture | 8000, 11025, 16000, 22050, 24000, 32000, 44100, 48000 Hz; 16-bit; 1 or 2 channels (mono is (L+R)/2) | spec 5.2 |
+| Resampling | audio_utils `create_resampler` (speex inside libaudioutils), quality 4, when the requested rate differs from the config | spec 5.2; system/media `audio_utils/resampler.c` at both tags |
+| Capture gains | at each capture start, `DMIC1 UL Volume` (both channels) ← `audio.dmic1gain` or 146, `AUDUL Voice UL Volume` ← `audio.voicegain` or 120; `voice_volume=<n>` in `set_parameters` sets the second | spec 4.4, 5.3 |
+| Start-up mute | the first 50 ms after each capture start are zeros; mic mute zeros everything | spec 5.2 |
+| Glasshub pause | `pause_for_audio` ← `1` when capture starts with any source but `VOICE_RECOGNITION`, `0` at standby | spec 6 (`persist.audio.hammer` default 1); `glasshub.c:1251-1318` |
+| `get_parameters` | `voice_volume`, `output_type` (1 none, 2 mono, 3 stereo, read again from sysfs) | spec 5.3 |
+
+Rule 6: the HAL writes no TWL6040 power or voltage setting other than the stock enum values of spec
+4.2 (`TWL6040 Power Mode` and `PLL Selection` "Low-Power", `Headset Power Mode`
+"High-Performance"). It never touches the handsfree (HF) outputs.
+
+Earpiece level (coordinator decision): `Earphone Playback Volume` defaults to
+`GLASS_EARPHONE_VOLUME_DEFAULT` = 12, which is 0 dB (`ep_tlv` is −24 dB + 2 dB per step,
+`twl6040.c:624, 853`), 6 dB below the stock 15 (+6 dB, also the control's maximum). Stock runs a
+limiter and filters for the transducer in its libglassalsa stage (spec 6), which this HAL does not
+have, so without it peaks could be louder than stock against the temple. 15 stays the hard cap
+(`GLASS_EARPHONE_VOLUME_MAX`). Raising the default to 15 is an owner decision, once the checklist row
+"no louder than stock" has been measured. `Headset Playback Volume` is the stock 12 (−6 dB), also its
+cap (`GLASS_HEADSET_VOLUME_MAX`). `glass_mixer_set_int` lowers any higher value of either control to
+its cap, and clamps every integer write (the init table, `voice_volume=`, `audio.dmic1gain`,
+`audio.voicegain`) to the control's range from `mixer_ctl_get_range_min/max`, since tinyalsa itself
+does not check it. The host tests check all of this. Loudness is otherwise AudioFlinger's software
+volume only.
+
+Permissions: the HAL runs in mediaserver (uid media, group audio) on 4.4 and 6.0. `mux_mode` and
+`pause_for_audio` are chowned to media and 0664 in `init.omap4430.rc` (`docs/hardware-facts.md`,
+Sysfs, checked by `tests/test_audio_logic.py`). `id_monitor` is `S_IWUGO | S_IRUGO` in the kernel
+(`notle-usb-mux.c:573`) and `headset` is 0444, so neither needs an init line. `/dev/snd/*` gets AOSP's
+`ueventd.rc` default (0660 system:audio). SELinux is permissive. No rootdir change was needed.
+
+### Where the HAL differs from the spec's section 7
+
+- Output path: the earbud detection decides when `headset` can be read, as on stock, and
+  AudioPolicy's routing (`WIRED_HEADSET`/`WIRED_HEADPHONE` vs the rest) decides only when it cannot.
+  The kernel reports plugging to the `h2w` switch from the same measurement, so the two agree
+  once the switch has reported.
+- `id_monitor` is written `1` at every output start, as stock does, not only when an earbud is
+  detected (section 7 suggests the latter for both files). Without it the kernel does not poll, the
+  `h2w` switch does not report an earbud plugged in during playback, and the path would only follow
+  at the next start. `mux_mode` is written only when an earbud is detected, as section 7 says.
+- Not implemented: the deep-buffer output and `persist.lab.lp_aud` (spec 5.1), the voice-FE output
+  for `audio.out.rate` ≤ 16000, and putting the input in standby when the output starts (spec 5.1,
+  last row), which served the stock echo reference. The stock `libglassalsa` processing (spec 6) has
+  no open replacement yet: no bone-conduction equalisation, limiter, wind or noise reduction. AOSP's
+  `audio_effects.conf` (frameworks/av `media/libeffects/data`) is installed by
+  `generic_no_telephony.mk`, which this product inherits through `aosp_base.mk`; its
+  `pre_processing` section is commented out by default, so no capture pre-processing is attached.
+  Enabling AOSP's pre-processing (AEC, NS, AGC) would need a device `audio_effects.conf` with that
+  section; `add_audio_effect` already accepts effects.
+- `audio.voicegain` is read once, when the device opens, and `voice_volume=` changes it after that;
+  stock reads it at each `open_input_stream`. `audio.dmic1gain` is read at each capture start
+  (stock: at `open_input_stream`). Both gains are written at each capture start, as stock does.
+- `mux_mode` is never written back. After an earbud was used and removed, it stays `audio` until
+  the kernel changes it (it switches to USB when a USB cable comes online). Stock does the same.
+- One input at a time: while one input stream is open (for example the always-on voice
+  recognition), a second `open_input_stream` fails with `-ENOSYS`.
+
+### Audio policy
+
+`audio/audio_policy.conf` keeps the stock devices: attached EARPIECE and SPEAKER (default SPEAKER),
+BUILTIN_MIC and BACK_MIC; primary output devices EARPIECE, SPEAKER, WIRED_HEADSET, WIRED_HEADPHONE
+and ALL_SCO; primary input 8000-48000 Hz, IN_MONO, IN_STEREO and IN_FRONT_BACK from BUILTIN_MIC,
+BLUETOOTH_SCO_HEADSET, WIRED_HEADSET and BACK_MIC; the usb module's two 44100 Hz outputs. Changes:
+- the primary output is 48000 Hz, not 44100, since the HAL plays at 48000 (spec 7);
+- `a2dp` (AOSP `audio.a2dp.default`, 44100 Hz, ALL_A2DP) and `r_submix` (AOSP
+  `audio.r_submix.default`, 48000 Hz, for screen casting) modules are added; stock has neither.
+
+The format is the same for 4.4's legacy `audio_policy.default` and 6.0's AudioPolicyManager, which
+both read `/system/etc/audio_policy.conf` with cutils' config parser (`#` comments are allowed).
+
+### Owner decisions (audio)
+
+- Earpiece level: the default is 12 (0 dB), 6 dB below stock (above). Raising it to 15 once the
+  "no louder than stock" checklist row has been measured.
+- SCO in the policy: kept from stock, but the HAL has no SCO path. With a Bluetooth headset in a
+  call or VoIP app, AudioPolicy may route to SCO on the primary output and the sound then plays on
+  the transducer and records from the built-in mics, as on stock. Removing ALL_SCO and
+  BLUETOOTH_SCO_HEADSET would avoid that.
+- `a2dp` and `r_submix` modules: added (above); drop them to match stock.
+- `pause_for_audio`: the stock rule (every source but `VOICE_RECOGNITION`) is kept. Whether the
+  glasshub (wink and on-head sensor) should pause at all while recording is a product choice.
+
 ## What a 4.4 branch needs
 
-All three HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
+All four HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
 - Power: nothing beyond the tree's `PRODUCT_PACKAGES` line. 4.4's `init.rc` already gives system the
   governor files (above), and 4.4's PowerManagerService uses power API 0.2. `hardware/ti/omap4` on a 4.4
   tree may add its own `power.omap4`; it stays unused for the same lookup-order reason.
@@ -401,5 +522,18 @@ All three HALs build unchanged on a 4.4 tree: same sources, same `Android.mk`.
   stock 4.4 ramdisk already has. 4.4's LightsService handles a NULL device for absent lights as 6.0's does.
 - Sensors: nothing beyond `PRODUCT_PACKAGES` and the `/data/misc/sensors` mkdir in
   `init.omap4430.rc` (see "Sensors: what a 4.4 branch needs" above).
-- SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server to write
-  `sysfs` on both trees.
+- Audio:
+  - `audio/Android.mk` installs with `LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw`, which
+    4.4 accepts (no `LOCAL_MODULE_RELATIVE_PATH` before 5.0).
+  - `system/audio.h` is in system/core at 4.4 (system/media at 6.0); the include paths of both
+    builds find it, and `#ifdef AUDIO_DEVICE_API_VERSION_3_0` picks the 4.4 stream-open signatures.
+    `include-path-for audio-utils` exists in both builds.
+  - 4.4's AudioPolicyService loads `audio_policy.default`, which `generic_no_telephony.mk` already
+    adds (with `audio.primary.default`, never loaded since `audio.primary.glass_1` wins). It reads the
+    same `audio/audio_policy.conf`; the policy needs nothing extra.
+  - `audio.a2dp.default` comes from `external/bluetooth/bluedroid` on 4.4 (`system/bt` on 6.0);
+    `audio.usb.default` and `audio.r_submix.default` from hardware/libhardware; `tinymix` from
+    external/tinyalsa. Same `device.mk` lines.
+- SELinux: 4.4 on this tree is permissive too. Enforcing would need policy for system_server (power,
+  lights, sensors) and mediaserver (audio: `/dev/snd`, `usb_mux.0`, `pause_for_audio`) to use
+  `sysfs` and the device nodes on both trees.

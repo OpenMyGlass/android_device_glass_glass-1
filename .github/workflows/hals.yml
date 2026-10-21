@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 env:
-  HALS: power lights sensors
+  HALS: power lights sensors audio
 jobs:
   hals:
     runs-on: ubuntu-latest

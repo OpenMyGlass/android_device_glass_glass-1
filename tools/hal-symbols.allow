@@ -3,3 +3,24 @@
 # does not ship (libcutils, libutils, libhardware, libtinyalsa, ...): one '<library> <symbol>'
 # per line, for a HAL whose Android.mk lists that library in LOCAL_SHARED_LIBRARIES.
 # Symbols of libc, libm, libdl and liblog are checked against the NDK's stubs instead.
+
+# audio.primary.glass_1 (audio/)
+libaudioutils create_resampler
+libaudioutils release_resampler
+libcutils property_get
+libtinyalsa mixer_close
+libtinyalsa mixer_ctl_get_num_values
+libtinyalsa mixer_ctl_get_range_max
+libtinyalsa mixer_ctl_get_range_min
+libtinyalsa mixer_ctl_set_enum_by_string
+libtinyalsa mixer_ctl_set_value
+libtinyalsa mixer_get_ctl_by_name
+libtinyalsa mixer_open
+libtinyalsa pcm_close
+libtinyalsa pcm_get_buffer_size
+libtinyalsa pcm_get_error
+libtinyalsa pcm_get_htimestamp
+libtinyalsa pcm_is_ready
+libtinyalsa pcm_open
+libtinyalsa pcm_read
+libtinyalsa pcm_write
