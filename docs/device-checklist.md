@@ -75,3 +75,14 @@ All not run.
 - `/data/misc/camera` exists, 0770 media:media, and `logcat` shows either DCC files found or "No DCC files found, switching back to default DCC", with no permission error. Not run.
 - Media codecs: `MediaCodecList` (from a test app, or `logcat` of mediaserver at boot) lists the four TI codecs first and the release's `OMX.google.*` codecs after them; an H.264 720p file plays on `OMX.TI.DUCATI1.VIDEO.DECODER`. Not run.
 - Media profiles kept from stock with odd values: recording with the qcif, cif or 480p profile (AAC at 12.2 kbit/s, 8 kHz, stereo) and an AMR recording (declared two channels) work, or fail in a way that says which value to change. Not run.
+
+## Hardware composer (`docs/hals.md`, Hardware composer)
+
+- The source-built HAL runs: `ls -l /system/vendor/lib/hw/hwcomposer.omap4.so` is the built file (not the stock blob's size), `logcat -s ti_hwc` at boot shows `open_device(rgb_order=1 nv12_only=0)` and "Expecting h/w vsync for glass_1", and SurfaceFlinger logs "Using composer version 1.0" (HWC 1.0) rather than falling back to GLES-only composition. Not run.
+- `/dev/graphics/fb1` exists (the HAL fails to open without it) and `/dev/dsscomp` opens: no "failed to open hdmi fb" or "failed to open dsscomp" in `logcat -s ti_hwc`. Not run.
+- Composition: the home screen, an app with a video (an NV12 overlay) and the notification animations draw correctly, with no tearing or wrong colours; `adb shell dumpsys SurfaceFlinger` shows layers on overlays (HWC) as well as GLES. Not run.
+- Vsync: `setprop debug.hwc.showfps 1` and `logcat -s ti_hwc` show a steady frame rate during an animation, close to the panel rate with stock's `vsync_divider` of 6. Not run.
+- Idle timeout: with `debug.hwc.idle` at its default 250 ms, a still screen with two or more overlays goes to GPU composition (one `invalidate`); with `setprop debug.hwc.idle 0` and a SurfaceFlinger restart it does not. Compare battery current on a still screen both ways. Not run.
+- Blits: logcat shows "Unable to open gc-core device ..., blits disabled", as expected without a `/dev/gcioctl` ueventd row. Not run.
+- Post2 path: `dmesg` shows no omaplfb `WARN` ("invalid size", "Trying to blit ...") after boot and after playing a video. Not run.
+- Writeback: any Glass feature that mirrors the screen (for example screencast to the phone) still works without `libdsswbhal.so`, or fails in a way that shows it needed DSS writeback. Not run.
