@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 env:
-  HALS: power lights
+  HALS: power lights sensors
 jobs:
   hals:
     runs-on: ubuntu-latest
@@ -35,7 +35,9 @@ jobs:
           path: ${{ runner.temp }}/ndk/*.zip
           key: ndk-${{ hashFiles('tools/ndk.env') }}
       - name: Fetch the pinned NDK
-        run: echo "ANDROID_NDK_HOME=$(tools/fetch-ndk.sh "$RUNNER_TEMP/ndk")" >> "$GITHUB_ENV"
+        run: |
+          ndk=$(tools/fetch-ndk.sh "$RUNNER_TEMP/ndk")
+          echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"
       - name: Fetch pinned AOSP headers
         run: tools/fetch-aosp-headers.sh "${{ matrix.tag }}" "$RUNNER_TEMP/aosp"
       - name: Cross-compile and check the HALs

@@ -9,7 +9,7 @@ _spec = importlib.util.spec_from_file_location("build_hals", ROOT / "tools" / "b
 build_hals = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(build_hals)
 
-HALS = ("power", "lights")
+HALS = ("power", "lights", "sensors")
 
 
 class AndroidMkTest(unittest.TestCase):
@@ -21,7 +21,10 @@ class AndroidMkTest(unittest.TestCase):
                 for src in mk["LOCAL_SRC_FILES"]:
                     self.assertTrue((ROOT / hal / src).is_file(), src)
                 self.assertIn("-Werror", mk["LOCAL_CFLAGS"])
-                self.assertEqual(mk["LOCAL_SHARED_LIBRARIES"], ["liblog"])
+                libs = mk["LOCAL_SHARED_LIBRARIES"]
+                self.assertIn("liblog", libs)
+                # Only NDK libraries so far; a system library needs allowlisted symbols.
+                self.assertLessEqual(set(libs), set(build_hals.NDK_LIBS))
 
     def test_continuation_and_append(self):
         mk = build_hals.parse_android_mk(
