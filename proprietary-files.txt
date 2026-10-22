@@ -20,9 +20,6 @@ vendor/lib/egl/libGLESv1_CM_POWERVR_SGX540_120.so
 vendor/lib/egl/libGLESv2_POWERVR_SGX540_120.so
 vendor/lib/libIMGegl_SGX540_120.so
 vendor/lib/libPVRScopeServices_SGX540_120.so
-vendor/lib/libbltsville_gc2d.2.2.2.0.so
-vendor/lib/libbltsville_ticpu.2.1.0.0.so
-vendor/lib/libbltsville_ticpu_license.txt
 vendor/lib/libglslcompiler_SGX540_120.so
 vendor/lib/libpvr2d_SGX540_120.so
 vendor/lib/libpvrANDROID_WSEGL_SGX540_120.so
