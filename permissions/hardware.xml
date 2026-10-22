@@ -41,7 +41,6 @@
 
     <!-- Location -->
     <feature name="android.hardware.location" />
-    <feature name="android.hardware.location.gps" />
     <feature name="android.hardware.location.network" />
 
     <!-- Sensors -->
