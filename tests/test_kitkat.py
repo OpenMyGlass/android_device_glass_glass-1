@@ -97,6 +97,44 @@ class KitKatTreeTest(unittest.TestCase):
                     with self.subTest(flag=flag):
                         self.assertIn(key, FS_MGR_FLAGS_4_4)
 
+    def test_lean_overlay_and_heap(self):
+        text = (ROOT / "overlay/frameworks/base/core/res/res/values/config.xml").read_text()
+        for name in ("config_voice_capable", "config_sms_capable", "config_dreamsSupported"):
+            self.assertIn(f'<bool name="{name}">false</bool>', text)
+        self.assertNotIn('<item>"mobile', text)
+        lines = code("device.mk")
+        self.assertIn("$(call inherit-product, frameworks/native/build/phone-hdpi-512-dalvik-heap.mk)",
+                      lines)
+        self.assertFalse([l for l in lines if "xhdpi-1024" in l])
+
+
+@unittest.skipUnless(shutil.which("make"), "needs make")
+class RemovedPackagesTest(unittest.TestCase):
+    """BoardConfig.mk filters the product's packages, as build/core/config.mk would read it."""
+
+    def test_filter(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        (tmp / "t.mk").write_text(
+            "INTERNAL_PRODUCT := device/glass/glass-1/aosp_glass_1.mk\n"
+            "PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGES := Settings TeleService Home "
+            "Launcher2 SystemUI LatinIME libwnndict\n"
+            f"include {ROOT}/BoardConfig.mk\n"
+            "all:\n\t@echo '$(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGES))'\n")
+        r = subprocess.run(["make", "-s", "-f", "t.mk"], cwd=tmp, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.split(), ["Settings", "TeleService", "Home", "SystemUI"])
+
+    def test_keeps_what_the_system_needs(self):
+        text = (ROOT / "BoardConfig.mk").read_text()
+        block = text[text.index("GLASS_REMOVED_PACKAGES :="):text.index("PRODUCTS.$(INTERNAL")]
+        removed = set(block.replace("\\", " ").split()[2:])
+        for keep in ("Home", "Settings", "SystemUI", "Keyguard", "Bluetooth", "PackageInstaller",
+                     "DocumentsUI", "DownloadProviderUi", "Provision", "ContactsProvider",
+                     "TeleService", "TelephonyProvider", "PrintSpooler"):
+            self.assertNotIn(keep, removed)
+        self.assertIn("Browser", removed)
+
 
 @unittest.skipUnless(shutil.which("make"), "needs make")
 class KernelSelectionTest(unittest.TestCase):
