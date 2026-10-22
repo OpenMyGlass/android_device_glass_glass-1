@@ -370,10 +370,11 @@ All paths are under /sys/class/android_usb.
 
 ## Directories
 
+XE24 also makes `/data/gps` and `/data/gps/nvm` (0770 system system) for the CSR GPS library. This tree
+has no GPS HAL (`docs/hals.md`, No GPS HAL), so it does not make them.
+
 | Path | Mode | User | Group | Source |
 |---|---|---|---|---|
-| /data/gps | 0770 | system | system | XE24 ramdisk, Justin 6.0 tree |
-| /data/gps/nvm | 0770 | system | system | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/audio | 0664 | system | system | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/dhcp | 0770 | dhcp | dhcp | XE24 ramdisk, Justin 6.0 tree |
 | /data/misc/gcam | 0770 | media | camera | XE24 ramdisk, Justin 6.0 tree |

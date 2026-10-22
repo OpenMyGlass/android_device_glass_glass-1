@@ -172,17 +172,17 @@ How the receiver stays off:
   (`gps_elton.c:109-114`), so any process can write `onoff` and `reset`; this tree leaves that kernel
   default alone and adds no writer.
 - `/dev/ttyO3` keeps its stock owner (system, 0660, `docs/hardware-facts.md`), with nothing opening
-  it. `/data/gps` and `/data/gps/nvm` are still created (stock facts in `docs/hardware-facts.md`)
-  but nothing uses them.
+  it. `/data/gps` and `/data/gps/nvm`, which stock makes for the CSR library, are not made.
 - `proprietary-files.txt` no longer lists the stock `lib/hw/gps.omap4.so` (the CSR location library)
   or `vendor/firmware/NVM2`. NVM2 is the receiver's ROM patch, which only that library downloads to
   the chip (`docs/specs/gps.md`, 4.3, where the CSR library's configuration names it): nothing in
   this tree or the kernel source does. With no `gps.*.so`, the framework finds no GPS HAL and
   reports GPS as unsupported.
 
-`permissions/hardware.xml` still declares `android.hardware.location.gps`, and
-`power_profile.xml` keeps `gps.on`. Whether to drop the feature until the phone-backed provider
-exists is an owner decision.
+`permissions/hardware.xml` does not declare `android.hardware.location.gps` (it keeps
+`android.hardware.location` and `android.hardware.location.network`, which the phone-backed provider
+will serve), and `power_profile.xml` has no `gps.on`. App stores that filter on features then hide
+apps that require GPS, and battery stats charge nothing to GPS.
 
 ## What a 4.4 branch needs
 
