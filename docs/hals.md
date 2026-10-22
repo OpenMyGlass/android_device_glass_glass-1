@@ -199,7 +199,8 @@ How the receiver stays off:
 `permissions/hardware.xml` does not declare `android.hardware.location.gps` (it keeps
 `android.hardware.location` and `android.hardware.location.network`, which the phone-backed provider
 will serve), and `power_profile.xml` has no `gps.on`. App stores that filter on features then hide
-apps that require GPS, and battery stats charge nothing to GPS.
+apps that require GPS, including apps that request `ACCESS_FINE_LOCATION` without marking GPS
+optional. Battery stats charge nothing to GPS.
 
 ## Sensors HAL (`sensors/`, `sensors.glass_1`)
 
