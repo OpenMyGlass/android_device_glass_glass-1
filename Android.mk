@@ -29,4 +29,11 @@ LOCAL_PATH := $(call my-dir)
 
 include $(call all-makefiles-under,$(LOCAL_PATH))
 
+# hardware/ti/omap4's pvrsrvinit links libsrv_init_SGX540_120 and libsrv_um_SGX540_120 from
+# $(TARGET_OUT_VENDOR)/lib (-L), but only its phony target depends on them. Make the link wait
+# for the copies, so a parallel build cannot link before they are installed.
+$(call intermediates-dir-for,EXECUTABLES,pvrsrvinit)/LINKED/pvrsrvinit: \
+    $(TARGET_OUT_VENDOR)/lib/libsrv_init_SGX540_120.so \
+    $(TARGET_OUT_VENDOR)/lib/libsrv_um_SGX540_120.so
+
 endif
