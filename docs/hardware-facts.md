@@ -277,6 +277,7 @@ rfkill0 and rfkill3 belong to Bluetooth, rfkill1 and rfkill2 to Wi-Fi.
 | iprenew_bt-pan | /system/bin/dhcpcd | main | - | - | yes | XE24 ramdisk, Justin 6.0 tree |
 | iprenew_wlan0 | /system/bin/dhcpcd | main | - | - | yes | XE24 ramdisk, Justin 6.0 tree |
 | raft | /system/bin/raft | main | - | - | yes | XE24 ramdisk |
+| sdcard | /system/bin/sdcard | late_start | - | - | no | XE24 ramdisk; options in 4.4's form (AOSP hammerhead 4.4.4) |
 | setup_fs | /system/bin/setup_fs | core | root | root | yes | XE24 ramdisk, Justin 6.0 tree |
 | shm_service | /system/bin/shm_service | core | system | system | no | XE24 ramdisk (Justin 6.0 tree disables it) |
 | sysproxyd | /system/bin/sysproxyd | main | root | root | no | XE24 ramdisk (Justin 6.0 tree drops it) |
@@ -292,6 +293,7 @@ rfkill0 and rfkill3 belong to Bluetooth, rfkill1 and rfkill2 to Wi-Fi.
 | iprenew_bt-pan | -n | disabled | XE24 ramdisk, Justin 6.0 tree |
 | iprenew_wlan0 | -n | disabled | XE24 ramdisk, Justin 6.0 tree |
 | raft | none | disabled; started when persist.sys.raft_logs becomes true, stopped when it becomes false | XE24 ramdisk |
+| sdcard | -u 1023 -g 1023 -l /data/media /mnt/shell/emulated | none | XE24 ramdisk (source /data/media, target /mnt/shell/emulated, uid and gid 1023); option syntax of 4.4's sdcard.c usage |
 | setup_fs | the cache and userdata block devices (by-name paths from Partitions) | none | XE24 ramdisk, Justin 6.0 tree |
 | shm_service | --no-fork | none | XE24 ramdisk |
 | sysproxyd | none | none | XE24 ramdisk |
@@ -398,7 +400,8 @@ The boost writes hold the CPU at a higher clock for the first 30 seconds of boot
 
 | When | Step | Source |
 |---|---|---|
-| on init | /mnt/sdcard and /storage/sdcard0 are symlinks to /sdcard | Justin 6.0 tree |
+| on init | emulated storage: /mnt/shell/emulated (0700 shell shell) and /storage/emulated (0555 root root) are created; EXTERNAL_STORAGE is /storage/emulated/legacy, EMULATED_STORAGE_SOURCE /mnt/shell/emulated, EMULATED_STORAGE_TARGET /storage/emulated | XE24 ramdisk (4.4.4 branch; the 6.0.1 branch leaves this to vold) |
+| on init | /sdcard, /mnt/sdcard and /storage/sdcard0 are symlinks to /storage/emulated/legacy, which links to /mnt/shell/emulated/0 | XE24 ramdisk (4.4.4 branch; the 6.0.1 branch links /mnt/sdcard and /storage/sdcard0 to /sdcard) |
 | on fs | /dev/block/platform/omap is a symlink to /dev/block/platform, so both by-name paths work | XE24 ramdisk, Justin 6.0 tree |
 | on fs | mount all and enable swap from /fstab.omap4430 | XE24 ramdisk, Justin 6.0 tree |
 | on fs | wait for /dev/rpmsg-omx0 and /dev/rpmsg-omx1, then load /system/lib/modules/pvrsrvkm_sgx540_120.ko | XE24 ramdisk, Justin 6.0 tree |
@@ -423,10 +426,8 @@ its own copy in /system/lib/modules; the tree does not extract it.
 | service glass_init (/system/etc/glass_init.sh) | Glass-only script, not in proprietary-files.txt. |
 | service glass_tpflash (/system/etc/glass_tpflash.sh) | Glass-only script, not in proprietary-files.txt. |
 | service pvrsrvinit | OMAP4-AOSP `init.omap4.rc`, which `init.omap4430.rc` imports, already defines it for /system/bin/pvrsrvinit, built from OMAP4-AOSP; a second definition would clash. Justin 6.0 tree drops it too. |
-| service sdcard | Android 6.0 vold starts the sdcard daemon itself; Justin 6.0 tree drops it. |
-| XE24 emulated-storage layout (/mnt/shell/emulated, /storage/emulated, EXTERNAL_STORAGE and EMULATED_STORAGE_* variables) | Android 4.4 layout; 6.0 vold manages storage. Justin 6.0 tree drops it. |
 | /data/private-cache (mode 6770) | Owned by a Glass-only user ID that AOSP does not define. |
-| /data/system and /data/media | AOSP init.rc already creates them. |
+| /data/system and /data/media | AOSP init.rc creates /data/system; installd creates /data/media (4.4) or vold does (6.0). |
 | /data/local/tmp mode 0777 | Debugging aid for valgrind; AOSP init.rc sets its own mode. |
 | /dev/ion mode 0777 (stock init, on boot) | Wider than the ueventd mode 0666; the Device nodes table keeps 0666. |
 | /proc/cmdline mode 0444 | XE24 only; Justin 6.0 tree drops it. |
