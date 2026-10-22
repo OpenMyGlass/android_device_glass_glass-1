@@ -20,6 +20,13 @@
 # Inherit from the common Open Source product configuration
 $(call inherit-product, $(SRC_TARGET_DIR)/product/aosp_base.mk)
 
+# ART only. core_minimal.mk, inherited above, lists runtime_libdvm_default and runtime_libart.
+# Assigning here, after inherit-product, replaces that list (inherit-product stores the
+# inherited values in the variable itself), so only runtime_libart_default is included by
+# build/core/product_config.mk. The "Dalvik" fallbacks in libnativehelper and installd are
+# patched in the forks pinned by OpenMyGlass/manifest.
+PRODUCT_RUNTIMES := runtime_libart_default
+
 PRODUCT_NAME := full_glass_1
 PRODUCT_DEVICE := glass-1
 PRODUCT_BRAND := Google
