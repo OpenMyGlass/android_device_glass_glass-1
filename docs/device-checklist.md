@@ -28,3 +28,8 @@ All not run.
 
 - GPS stays off: after a cold boot, after a reboot straight from stock firmware, and after suspend/resume, `cat /sys/class/gps/gps_elton/{onoff,reset,awake}` reads 0, 1, 0 (hibernate), and battery current with the screen off matches a build without any GPS use. Not run.
 - No `gps_elton` writes: `dmesg` has no `Setting on_off` or `Setting reset` lines from the driver, `logcat` shows no GPS HAL loading, and nothing opens `/dev/ttyO3` (`ls -l /proc/*/fd 2>/dev/null | grep ttyO3` is empty). Not run.
+
+## Media (`docs/media-facts.md`)
+
+- Media codecs: `MediaCodecList` (from a test app, or `logcat` of mediaserver at boot) lists, among decoders, `OMX.TI.DUCATI1.VIDEO.DECODER` first and then the `OMX.google.*` decoders, and among encoders the three TI encoders and then the `OMX.google.*` encoders (the order of `media_codecs.xml`). An H.264 720p file plays on `OMX.TI.DUCATI1.VIDEO.DECODER`, and a VP8 file plays on `OMX.google.vp8.decoder`. Not run.
+- Media profiles kept from stock with odd values: recording with the qcif, cif or 480p profile (AAC at 12.2 kbit/s, 8 kHz, stereo) and an AMR recording (declared two channels) work, or fail in a way that says which value to change. Not run.
