@@ -49,6 +49,9 @@ manifest's `docs/kitkat-base.md`.
 
   So the three `libbltsville_*` lines are dropped from `proprietary-files.txt`. Extracting them
   as well would give two rules for the same output file.
+- **Media XMLs.** `media_codecs.xml` lists the software codecs itself, since 4.4 has no
+  `Include` element; `media_profiles.xml` is the 6.0.1 branch's file. Both follow
+  `docs/media-facts.md`, which `tests/test_media.py` checks.
 - **Dex pre-optimisation.** `WITH_DEXPREOPT_PIC` is a 5.0+ variable and is dropped.
 - **ART only.** See the next section.
 
