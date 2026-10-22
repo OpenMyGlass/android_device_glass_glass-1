@@ -368,9 +368,6 @@ All paths are under /sys/class/android_usb.
 
 ## Directories
 
-XE24 also makes `/data/gps` and `/data/gps/nvm` (0770 system system) for the CSR GPS library. This tree
-has no GPS HAL (`docs/hals.md`, No GPS HAL), so it does not make them.
-
 | Path | Mode | User | Group | Source |
 |---|---|---|---|---|
 | /data/misc/audio | 0664 | system | system | XE24 ramdisk, Justin 6.0 tree |
@@ -426,6 +423,7 @@ its own copy in /system/lib/modules; the tree does not extract it.
 | service glass_bootconfig (/system/etc/glass_bootconfig.sh) | Glass-only script, not in proprietary-files.txt (the xbin/bootconfig tool it drives is). |
 | service glass_bqflash (/system/etc/glass_bqflash.sh) | Glass-only script, not in proprietary-files.txt (the bin/bqflash tool it drives is). |
 | service glass_gpsclear (/system/etc/glass_gpsclear.sh) | Glass-only script, not in proprietary-files.txt. |
+| mkdir /data/gps, /data/gps/nvm (0770 system system, XE24 ramdisk) | For the CSR GPS library; there is no GPS HAL (docs/hals.md, No GPS HAL). |
 | service glass_init (/system/etc/glass_init.sh) | Glass-only script, not in proprietary-files.txt. |
 | service glass_tpflash (/system/etc/glass_tpflash.sh) | Glass-only script, not in proprietary-files.txt. |
 | service pvrsrvinit | OMAP4-AOSP `init.omap4.rc`, which `init.omap4430.rc` imports, already defines it for /system/bin/pvrsrvinit, built from OMAP4-AOSP; a second definition would clash. Justin 6.0 tree drops it too. |
