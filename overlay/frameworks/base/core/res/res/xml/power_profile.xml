@@ -29,7 +29,6 @@
     <item name="wifi.scan">100</item>
     <item name="dsp.audio">150</item>
     <item name="dsp.video">300</item>
-    <item name="gps.on">55</item>
     <item name="battery.capacity">580</item>
     <array name="cpu.speeds">
         <value>300000</value>
