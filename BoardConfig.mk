@@ -48,8 +48,10 @@ BOARD_SYSTEMIMAGE_PARTITION_SIZE := 1073741824
 BOARD_USERDATAIMAGE_PARTITION_SIZE := 14028374016
 BOARD_FLASH_BLOCK_SIZE := 131072
 
-# Dex pre-optimization (WITH_DEXPREOPT_PIC is a 5.0+ variable)
-WITH_DEXPREOPT := true
+# ART only (docs/kitkat.md). 4.4 pre-optimises only for Dalvik: the host dexopt writes .odex
+# files that ART does not read. So nothing is pre-optimised, every APK and jar keeps its
+# classes.dex, and dex2oat compiles it on the device.
+DISABLE_DEXPREOPT := true
 
 # Wi-Fi
 BOARD_WLAN_DEVICE                := bcmdhd

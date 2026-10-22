@@ -54,6 +54,30 @@ class KitKatTreeTest(unittest.TestCase):
     def test_bltsville_comes_from_hardware_ti_omap4(self):
         self.assertIn("TI_OMAP_USE_BLTSVILLE := true", code("BoardConfig.mk"))
 
+    def test_art_only_product(self):
+        lines = code("full_glass_1.mk")
+        inherit = lines.index("$(call inherit-product, $(SRC_TARGET_DIR)/product/aosp_base.mk)")
+        runtimes = lines.index("PRODUCT_RUNTIMES := runtime_libart_default")
+        self.assertGreater(runtimes, inherit, "must come after the AOSP product is inherited")
+        self.assertEqual([l for l in lines if "PRODUCT_RUNTIMES" in l],
+                         ["PRODUCT_RUNTIMES := runtime_libart_default"])
+        for rel in ("device.mk", "aosp_glass_1.mk"):
+            self.assertFalse([l for l in code(rel) if "PRODUCT_RUNTIMES" in l], rel)
+
+    def test_no_dex_preopt(self):
+        lines = code("BoardConfig.mk")
+        self.assertIn("DISABLE_DEXPREOPT := true", lines)
+        self.assertFalse([l for l in lines if l.startswith("WITH_DEXPREOPT")])
+
+    def test_dex2oat_filter_defaults(self):
+        props = dict(l.split("=", 1) for l in (ROOT / "system.prop").read_text().splitlines()
+                     if l and not l.startswith("#"))
+        self.assertEqual(props.get("persist.glass.d2o.sys"), "speed")
+        self.assertEqual(props.get("persist.glass.d2o.usr"), "space")
+        for key in props:
+            self.assertLessEqual(len(key), 31, f"{key}: longer than 4.4's PROP_NAME_MAX - 1")
+        self.assertNotIn("dalvik.vm.jit.codecachesize", props)
+
     def test_init_files_use_only_4_4_keywords(self):
         for rc in sorted((ROOT / "rootdir").glob("*.rc")):
             if rc.name.startswith("ueventd."):
