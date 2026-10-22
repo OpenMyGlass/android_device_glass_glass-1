@@ -88,4 +88,7 @@ PRODUCT_PACKAGES += \
     setup_fs
 
 $(call inherit-product-if-exists, vendor/glass/glass-1/device-vendor.mk)
-$(call inherit-product, frameworks/native/build/phone-xhdpi-1024-dalvik-heap.mk)
+# Heap sizes for the 640x360 display (docs/kitkat.md, "Lean items"): 5m start, 48m growth
+# limit, 128m for largeHeap apps, instead of phone-xhdpi-1024's 8m/96m/256m. XE24 used
+# 5m/72m/192m. A 640x360 ARGB frame is 0.9 MB.
+$(call inherit-product, frameworks/native/build/phone-hdpi-512-dalvik-heap.mk)
