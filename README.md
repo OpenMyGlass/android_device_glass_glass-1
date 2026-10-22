@@ -30,8 +30,9 @@ This writes `vendor/glass/glass-1/proprietary/` and `device-vendor.mk`, which
 `device.mk` inherits.
 
 This branch (Android 6.0.1, Track B) is built from
-[OpenMyGlass/manifest](https://github.com/OpenMyGlass/manifest), branch `android-6.0`, which
-pins every project and has the build script and guide. The kernel and the GPU module come from
+[OpenMyGlass/manifest](https://github.com/OpenMyGlass/manifest)'s `android-6.0.xml` on `main`
+(`repo init -u https://github.com/OpenMyGlass/manifest -m android-6.0.xml`), which pins every
+project; the manifest repository also has the build script and guide. The kernel and the GPU module come from
 [glass-kernel](https://github.com/OpenMyGlass/glass-kernel) (variant `tuned-stable`, IMG DDK
 `1.9@2166536`, dual MIT/GPL-2.0, the build of XE24's user-space libraries); the manifest's
 `tools/fetch-kernel.sh` puts them in `vendor/glass/kernel/`, where `device.mk` installs them
