@@ -38,3 +38,11 @@ wlan.driver.vendor=bcm
 # Bluetooth
 bluetooth.enable_timeout_ms=10000
 ro.bt.bdaddr_path=/data/misc/bluedroid/bdaddr
+
+# dex2oat on the device: installd (frameworks/native cmds/installd/commands.cpp, 6.0.1) passes
+# --compiler-filter=$(dalvik.vm.dex2oat-filter) when it compiles an app installed or updated on
+# the Glass; without it dex2oat uses "speed" (art compiler/driver/compiler_options.h). "space"
+# keeps such apps' compiled code smaller, so less of it is mapped in the 682 MB of RAM, and
+# installs faster. The system and its boot image are compiled at build time (WITH_DEXPREOPT in
+# BoardConfig.mk) with the default, speed. "interpret-only" would save more but cost CPU (heat).
+dalvik.vm.dex2oat-filter=space
