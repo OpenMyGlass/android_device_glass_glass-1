@@ -28,6 +28,7 @@ All not run.
 
 - GPS stays off: after a cold boot, after a reboot straight from stock firmware, and after suspend/resume, `cat /sys/class/gps/gps_elton/{onoff,reset,awake}` reads 0, 1, 0 (hibernate), and battery current with the screen off matches a build without any GPS use. Not run.
 - No `gps_elton` writes: `dmesg` has no `Setting on_off` or `Setting reset` lines from the driver, `logcat` shows no GPS HAL loading, and nothing opens `/dev/ttyO3` (`ls -l /proc/*/fd 2>/dev/null | grep ttyO3` is empty). Not run.
+- `adb shell pm list features` has `android.hardware.location` and `android.hardware.location.network` but not `android.hardware.location.gps`, and `/data/gps` does not exist. Not run.
 
 ## Sensors HAL (`docs/hals.md`, `docs/specs/sensors.md`)
 

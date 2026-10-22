@@ -265,8 +265,6 @@ on boot
     mount debugfs debugfs /sys/kernel/debug
     symlink /proc/self/fd /dev/fd
 
-    mkdir /data/gps 0770 system system
-    mkdir /data/gps/nvm 0770 system system
     mkdir /data/misc/audio 0664 system system
     mkdir /data/misc/camera 0770 media media
     mkdir /data/misc/dhcp 0770 dhcp dhcp
