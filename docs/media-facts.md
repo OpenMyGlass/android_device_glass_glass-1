@@ -2,7 +2,7 @@
 # Glass Explorer Edition media facts
 
 `media_codecs.xml` and `media_profiles.xml` carry these facts. `tests/test_media.py` checks both
-files against the tables below, in order. The XML files are written from AOSP's
+files against the tables below that apply to 4.4, in order (all but "Software codec lists (6.0)"). The XML files are written from AOSP's
 `device/samsung/tuna` files (Galaxy Nexus, OMAP4 with the same Ducati codecs, Apache-2.0) at commit
 `8c9a241892d74ecb09c1c9a5eef0848c354f3fb6` (tag android-4.3.1_r1); the values are Glass's.
 
@@ -38,6 +38,8 @@ list, although OMAP4-AOSP builds both.
 AOSP they are listed but never picked. They stay because the stock list has them.
 
 ## Software codec lists (6.0)
+
+This section is for the `android-6.0.1_r31` branch; this branch does not use it.
 
 On 6.0 the software (`OMX.google.*`) codecs come from the release's own lists, which `device.mk`
 copies from `frameworks/av/media/libstagefright/data/` to `/system/etc/`. The TI video codecs come
@@ -134,6 +136,10 @@ The elements after `CamcorderProfiles`, in order. Attributes are listed as `name
 Odd values kept as stock has them, to check on a device (`docs/device-checklist.md`): the AMR
 encoders declare two channels although AMR is mono, the qcif, cif and 480p profiles record AAC at
 12.2 kbit/s and 8 kHz in stereo, and `maxFrameHeight` is 1920.
+
+AOSP 4.4 also registers software codecs that the XE24 list leaves out (among them the VP9
+decoder, the VP8, H.264, MPEG-4 and H.263 encoders, and the GSM decoder). This file leaves them
+out too.
 
 ## 4.4 and 6.0
 
